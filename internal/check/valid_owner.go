@@ -9,7 +9,7 @@ import (
 
 	"go.szostok.io/codeowners-validator/internal/ctxutil"
 
-	"github.com/google/go-github/v41/github"
+	"github.com/google/go-github/v93/github"
 	"github.com/pkg/errors"
 )
 
@@ -260,28 +260,8 @@ func (v *ValidOwner) validateTeam(ctx context.Context, name string) *validateErr
 		}
 	}
 
-	teamHasWritePermission := func() bool {
-		for k, v := range repo.GetPermissions() {
-			if !v {
-				continue
-			}
-
-			switch k {
-			case
-				"admin",
-				"maintain",
-				"push":
-				return true
-			case
-				"pull",
-				"triage":
-			}
-		}
-
-		return false
-	}
-
-	if !teamHasWritePermission() {
+	permissions := repo.GetPermissions()
+	if !permissions.GetAdmin() && !permissions.GetMaintain() && !permissions.GetPush() {
 		return newValidateError(
 			"Team %q cannot review PRs on %q as neither it nor any parent team has write permissions.",
 			team, v.orgRepoName)

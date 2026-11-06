@@ -10,7 +10,7 @@ import (
 
 	"go.szostok.io/codeowners-validator/pkg/url"
 
-	"github.com/google/go-github/v41/github"
+	"github.com/google/go-github/v93/github"
 	"golang.org/x/oauth2"
 )
 
@@ -66,21 +66,20 @@ func NewClient(ctx context.Context, cfg *ClientConfig) (ghClient *github.Client,
 			return
 		}
 	}
-	httpClient.Timeout = cfg.HTTPRequestTimeout
 
-	baseURL, uploadURL := cfg.BaseURL, cfg.UploadURL
-
-	if baseURL == "" {
-		ghClient = github.NewClient(httpClient)
-		return
+	opts := []github.ClientOptionsFunc{
+		github.WithHTTPClient(httpClient),
+		github.WithTimeout(cfg.HTTPRequestTimeout),
 	}
 
-	if uploadURL == "" { // often the baseURL is same as the uploadURL, so we do not require to provide both of them
-		uploadURL = baseURL
+	if baseURL, uploadURL := cfg.BaseURL, cfg.UploadURL; baseURL != "" {
+		if uploadURL == "" { // often the baseURL is same as the uploadURL, so we do not require to provide both of them
+			uploadURL = baseURL
+		}
+		opts = append(opts, github.WithEnterpriseURLs(url.CanonicalPath(baseURL), url.CanonicalPath(uploadURL)))
 	}
 
-	bURL, uURL := url.CanonicalPath(baseURL), url.CanonicalPath(uploadURL)
-	ghClient, err = github.NewEnterpriseClient(bURL, uURL, httpClient)
+	ghClient, err = github.NewClient(opts...)
 	return
 }
 
