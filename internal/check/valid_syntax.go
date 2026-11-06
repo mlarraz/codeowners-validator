@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"go.szostok.io/codeowners-validator/internal/ctxutil"
+	"github.com/mlarraz/codeowners-validator/internal/ctxutil"
 )
 
 var (

@@ -5,10 +5,10 @@ import (
 	"path"
 	"testing"
 
+	"github.com/mlarraz/codeowners-validator/pkg/codeowners"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.szostok.io/codeowners-validator/pkg/codeowners"
 )
 
 const sampleCodeownerFile = `
@@ -116,7 +116,7 @@ func TestFindCodeownersFileFailure(t *testing.T) {
 	defer revert()
 
 	givenRepoPath := "/workspace/go/repo-without-codeowners/"
-	expErrMsg := fmt.Sprintf("No CODEOWNERS found in the root, docs/, or .github/ directory of the repository %s", givenRepoPath)
+	expErrMsg := fmt.Sprintf("no CODEOWNERS found in the root, docs/, or .github/ directory of the repository %s", givenRepoPath)
 
 	// when
 	entries, err := codeowners.NewFromPath(givenRepoPath)
@@ -133,23 +133,23 @@ func TestMultipleCodeownersFileFailure(t *testing.T) {
 		givenCodeownersLocations []string
 	}{
 		"Should report that no CODEOWNERS file was found": {
-			expErrMsg:                fmt.Sprintf("No CODEOWNERS found in the root, docs/, or .github/ directory of the repository %s", givenRepoPath),
+			expErrMsg:                fmt.Sprintf("no CODEOWNERS found in the root, docs/, or .github/ directory of the repository %s", givenRepoPath),
 			givenCodeownersLocations: nil,
 		},
 		"Should report that CODEOWNERS file was found on root and docs/": {
-			expErrMsg:                fmt.Sprintf("Multiple CODEOWNERS files found in the ./CODEOWNERS and ./docs/CODEOWNERS locations of the repository %s", givenRepoPath),
+			expErrMsg:                fmt.Sprintf("multiple CODEOWNERS files found in the ./CODEOWNERS and ./docs/CODEOWNERS locations of the repository %s", givenRepoPath),
 			givenCodeownersLocations: []string{"CODEOWNERS", path.Join("docs", "CODEOWNERS")},
 		},
 		"Should report that CODEOWNERS file was found on root and .github/": {
-			expErrMsg:                fmt.Sprintf("Multiple CODEOWNERS files found in the ./CODEOWNERS and ./.github/CODEOWNERS locations of the repository %s", givenRepoPath),
+			expErrMsg:                fmt.Sprintf("multiple CODEOWNERS files found in the ./CODEOWNERS and ./.github/CODEOWNERS locations of the repository %s", givenRepoPath),
 			givenCodeownersLocations: []string{"CODEOWNERS", path.Join(".github/", "CODEOWNERS")},
 		},
 		"Should report that CODEOWNERS file was found in docs/ and .github/": {
-			expErrMsg:                fmt.Sprintf("Multiple CODEOWNERS files found in the ./docs/CODEOWNERS and ./.github/CODEOWNERS locations of the repository %s", givenRepoPath),
+			expErrMsg:                fmt.Sprintf("multiple CODEOWNERS files found in the ./docs/CODEOWNERS and ./.github/CODEOWNERS locations of the repository %s", givenRepoPath),
 			givenCodeownersLocations: []string{path.Join(".github", "CODEOWNERS"), path.Join("docs", "CODEOWNERS")},
 		},
 		"Should report that CODEOWNERS file was found on root, docs/ and .github/": {
-			expErrMsg:                fmt.Sprintf("Multiple CODEOWNERS files found in the ./CODEOWNERS, ./docs/CODEOWNERS, and ./.github/CODEOWNERS locations of the repository %s", givenRepoPath),
+			expErrMsg:                fmt.Sprintf("multiple CODEOWNERS files found in the ./CODEOWNERS, ./docs/CODEOWNERS, and ./.github/CODEOWNERS locations of the repository %s", givenRepoPath),
 			givenCodeownersLocations: []string{"CODEOWNERS", path.Join(".github", "CODEOWNERS"), path.Join("docs", "CODEOWNERS")},
 		},
 	}

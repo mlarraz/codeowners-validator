@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"go.szostok.io/codeowners-validator/internal/check"
+	"github.com/mlarraz/codeowners-validator/internal/check"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,7 +22,7 @@ func TestDuplicatedPattern(t *testing.T) {
 					/build/logs/ @doctocat
 					/build/logs/ @doctocat
 
-					/script @mszostok
+					/script @script-owner
 					/script m.t@g.com
 			`,
 			expectedIssues: []check.Issue{
@@ -37,7 +37,7 @@ func TestDuplicatedPattern(t *testing.T) {
 					Severity: check.Error,
 					LineNo:   nil,
 					Message: `Pattern "/script" is defined 2 times in lines:
-            * 7: with owners: [@mszostok]
+            * 7: with owners: [@script-owner]
             * 8: with owners: [m.t@g.com]`,
 				},
 			},

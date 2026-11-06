@@ -1,0 +1,23 @@
+# This is a comment.
+# Each line is a file pattern followed by one or more owners.
+
+# These owners will be the default owners for everything in
+# the repo. Unless a later match takes precedence,
+# @global-owner1 and @global-owner2 will be requested for
+# review when someone opens a pull request.
+*       @sample-owner
+
+/some/awesome/dir @sample-owner @owner-a
+/some/awesome/dir @octocat
+
+/this-folder-does-not-exits/really @sample-owner
+
+/some/other/maybe/awesome/file.txt @gh-codeowners/a-team @gh-codeowners/all-stars @gh-codeowners/amigos @gh-codeowners/avengers @gh-codeowners/bannermen @gh-codeowners/best-of-the-best @gh-codeowners/bosses @gh-codeowners/champions @gh-codeowners/crew @gh-codeowners/dominators @gh-codeowners/dream-team @gh-codeowners/elite @gh-codeowners/force @gh-codeowners/goal-diggers @gh-codeowners/heatwave @gh-codeowners/hot-shots @gh-codeowners/hustle @gh-codeowners/icons @gh-codeowners/justice-league @gh-codeowners/legends @gh-codeowners/lightning @gh-codeowners/maniacs @gh-codeowners/masters @gh-codeowners/monarchy @gh-codeowners/naturals @gh-codeowners/ninjas @gh-codeowners/outliers @gh-codeowners/peak-performers @gh-codeowners/power @gh-codeowners/rebels @gh-codeowners/revolution @gh-codeowners/ringmasters @gh-codeowners/rule-breakers @gh-codeowners/shakedown @gh-codeowners/squad @gh-codeowners/titans @gh-codeowners/tribe @gh-codeowners/united @gh-codeowners/vikings @gh-codeowners/warriors @gh-codeowners/wolf-pack
+
+/some/other/maybe/awesome/answer.txt @gh-codeowners/not-existing-team @wrong-org/a-team
+
+# In this example, @ghost owns any file in the `/apps`
+# directory in the root of your repository except for the `/apps/github`
+# subdirectory, as its owners are left empty.
+/apps/ @ghost
+/apps/github

@@ -66,11 +66,11 @@ func openCodeownersFile(dir string) (io.Reader, error) {
 
 	switch l := len(detectedFiles); l {
 	case 0:
-		return nil, fmt.Errorf("No CODEOWNERS found in the root, docs/, or .github/ directory of the repository %s", dir)
+		return nil, fmt.Errorf("no CODEOWNERS found in the root, docs/, or .github/ directory of the repository %s", dir)
 	case 1:
 		return fs.Open(detectedFiles[0])
 	default:
-		return nil, fmt.Errorf("Multiple CODEOWNERS files found in the %s locations of the repository %s",
+		return nil, fmt.Errorf("multiple CODEOWNERS files found in the %s locations of the repository %s",
 			english.OxfordWordSeries(replacePrefix(detectedFiles, dir, "./"), "and"),
 			dir)
 	}

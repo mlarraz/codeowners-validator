@@ -1,0 +1,22 @@
+# This is a comment.
+# Each line is a file pattern followed by one or more owners.
+
+# These owners will be the default owners for everything in
+# the repo. Unless a later match takes precedence,
+# @global-owner1 and @global-owner2 will be requested for
+# review when someone opens a pull request.
+*       @sample-owner
+
+# Check if GitHub is case insensitive
+/some/awesome/dir @sample-owner @GiTHubCodeOwners/A-TeAm  @GiTHubCodeOwners/all-STArs
+
+/some/other/maybe/awesome/file.txt @GitHubCODEOWNERS/Amigos
+/some/other/maybe/awesome/answer.txt  @GitHubCODEOWNERS/maniacs @GitHubCODEOWNERS/a-team @GitHubCODEOWNERS/all-stars
+
+*.md @ghost
+
+# In this example, @ghost owns any file in the `/apps`
+# directory in the root of your repository except for the `/apps/github`
+# subdirectory, as its owners are left empty.
+/apps/ @ghost
+/apps/github

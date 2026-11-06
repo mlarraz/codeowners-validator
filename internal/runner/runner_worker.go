@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"go.szostok.io/codeowners-validator/internal/check"
-	"go.szostok.io/codeowners-validator/internal/printer"
-	"go.szostok.io/codeowners-validator/pkg/codeowners"
+	"github.com/mlarraz/codeowners-validator/internal/check"
+	"github.com/mlarraz/codeowners-validator/internal/printer"
+	"github.com/mlarraz/codeowners-validator/pkg/codeowners"
 
 	"github.com/sirupsen/logrus"
 )
@@ -57,7 +57,7 @@ func NewCheckRunner(log logrus.FieldLogger, co []codeowners.Entry, repoPath stri
 func (r *CheckRunner) Run(ctx context.Context) {
 	wg := sync.WaitGroup{}
 
-	// TODO(mszostok): timeout per check?
+	// TODO: timeout per check?
 	wg.Add(len(r.checks))
 	for _, c := range r.checks {
 		go func(c check.Checker) {

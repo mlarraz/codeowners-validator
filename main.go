@@ -11,11 +11,11 @@ import (
 	"github.com/spf13/cobra"
 	"go.szostok.io/version/extension"
 
-	"go.szostok.io/codeowners-validator/internal/check"
-	"go.szostok.io/codeowners-validator/internal/envconfig"
-	"go.szostok.io/codeowners-validator/internal/load"
-	"go.szostok.io/codeowners-validator/internal/runner"
-	"go.szostok.io/codeowners-validator/pkg/codeowners"
+	"github.com/mlarraz/codeowners-validator/internal/check"
+	"github.com/mlarraz/codeowners-validator/internal/envconfig"
+	"github.com/mlarraz/codeowners-validator/internal/load"
+	"github.com/mlarraz/codeowners-validator/internal/runner"
+	"github.com/mlarraz/codeowners-validator/pkg/codeowners"
 )
 
 // Config holds the application configuration
@@ -68,7 +68,7 @@ func NewRoot() *cobra.Command {
 		Use:          "codeowners-validator",
 		Short:        "Ensures the correctness of your CODEOWNERS file.",
 		SilenceUsage: true,
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, _ []string) {
 			var cfg Config
 			err := envconfig.Init(&cfg)
 			exitOnError(err)

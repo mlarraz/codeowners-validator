@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"go.szostok.io/codeowners-validator/internal/check"
-	"go.szostok.io/codeowners-validator/internal/ptr"
+	"github.com/mlarraz/codeowners-validator/internal/check"
+	"github.com/mlarraz/codeowners-validator/internal/ptr"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,7 +19,7 @@ func TestAvoidShadowing(t *testing.T) {
 		"Should report info about shadowed entries": {
 			codeownersInput: `
 					/build/logs/ @doctocat
-					/script      @mszostok
+					/script      @script-owner
 
 					# Shadows
 					*            @s1

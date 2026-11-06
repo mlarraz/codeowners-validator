@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"go.szostok.io/codeowners-validator/internal/check"
+	"github.com/mlarraz/codeowners-validator/internal/check"
 
 	"github.com/stretchr/testify/require"
 
-	"go.szostok.io/codeowners-validator/internal/ptr"
+	"github.com/mlarraz/codeowners-validator/internal/ptr"
 
 	"github.com/stretchr/testify/assert"
 )

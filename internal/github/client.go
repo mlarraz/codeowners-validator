@@ -8,7 +8,7 @@ import (
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
 
-	"go.szostok.io/codeowners-validator/pkg/url"
+	"github.com/mlarraz/codeowners-validator/pkg/url"
 
 	"github.com/google/go-github/v93/github"
 	"golang.org/x/oauth2"
