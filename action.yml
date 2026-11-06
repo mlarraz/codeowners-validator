@@ -1,4 +1,4 @@
-name: "GitHub CODEOWNERS Validator"
+name: "CODEOWNERS Validator"
 description: "GitHub action to ensure the correctness of your CODEOWNERS file."
 author: "szostok.mateusz@gmail.com"
 
@@ -80,7 +80,7 @@ inputs:
 
 runs:
   using: 'docker'
-  image: 'docker://ghcr.io/mlarraz/codeowners-validator:v0.8.0'
+  image: 'docker://ghcr.io/mlarraz/codeowners-validator:v0.8.1'
   env:
     ENVS_PREFIX: "INPUT"
 
