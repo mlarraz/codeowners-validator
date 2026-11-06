@@ -6,16 +6,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,26 +27,51 @@ func normalizeLogTime(in string) string {
 	return duration.ReplaceAllString(in, `time="<time>"`)
 }
 
-func CloneRepo(t *testing.T, url string, branch string) (string, func()) {
+// getEnvOrSkip returns the value of the given environment variable and skips the
+// test when it's empty. These variables hold credentials for the test organizations,
+// which aren't available everywhere the tests run, for example in forks.
+func getEnvOrSkip(t *testing.T, name string) string {
 	t.Helper()
 
-	repoDir, err := ioutil.TempDir("", strings.ReplaceAll(t.Name(), "/", "-"))
-	require.NoError(t, err)
+	value := os.Getenv(name)
+	if value == "" {
+		t.Skipf("%s is not set", name)
+	}
+	return value
+}
 
-	cleanup := func() {
-		err = os.RemoveAll(repoDir)
-		require.NoError(t, err)
+// SampleRepo copies the sample repository testdata/repos/<org>/<branch> into a
+// temporary directory, commits all of its files to a new Git repository, and
+// returns the directory.
+//
+// The samples store their .gitignore files as "gitignore" so that they don't hide
+// sample files from this repository's own Git index; they're renamed back here.
+// Files are force-added because the samples contain files that their own
+// .gitignore excludes.
+func SampleRepo(t *testing.T, org string, branch string) string {
+	t.Helper()
+
+	repoDir := t.TempDir()
+	require.NoError(t, os.CopyFS(repoDir, os.DirFS(filepath.Join("testdata", "repos", org, branch))))
+	require.NoError(t, filepath.WalkDir(repoDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || d.Name() != "gitignore" {
+			return err
+		}
+		return os.Rename(path, filepath.Join(filepath.Dir(path), ".gitignore"))
+	}))
+
+	for _, args := range [][]string{
+		{"init", "--quiet"},
+		{"add", "--all", "--force"},
+		{"-c", "user.name=test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "--quiet", "--message", "sample"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repoDir
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
 	}
 
-	_, err = git.PlainClone(repoDir, false, &git.CloneOptions{
-		URL:           url,
-		ReferenceName: plumbing.NewBranchReferenceName(branch),
-		SingleBranch:  true,
-		Depth:         1,
-	})
-	require.NoError(t, err)
-
-	return repoDir, cleanup
+	return repoDir
 }
 
 type Executor struct {

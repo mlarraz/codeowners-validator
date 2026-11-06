@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"go.szostok.io/codeowners-validator/internal/check"
-	"go.szostok.io/codeowners-validator/internal/ptr"
+	"github.com/mlarraz/codeowners-validator/internal/check"
+	"github.com/mlarraz/codeowners-validator/internal/ptr"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

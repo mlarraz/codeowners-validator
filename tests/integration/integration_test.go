@@ -15,9 +15,11 @@ import (
 )
 
 const (
-	binaryPathEnvName                       = "BINARY_PATH"
-	codeownersSamplesRepo                   = "https://github.com/gh-codeowners/codeowners-samples.git"
-	caseInsensitiveOrgCodeownersSamplesRepo = "https://github.com/GitHubCODEOWNERS/codeowners-samples.git"
+	binaryPathEnvName = "BINARY_PATH"
+
+	// Sample repositories under testdata/repos, one directory per GitHub organization.
+	codeownersSamplesRepo                   = "gh-codeowners"
+	caseInsensitiveOrgCodeownersSamplesRepo = "GitHubCODEOWNERS"
 
 	gitHubAppId                = "190766"
 	gitHubAppInstallationId    = "24938181"
@@ -59,7 +61,7 @@ func TestCheckSuccess(t *testing.T) {
 	t.Run("offline checks", func(t *testing.T) {
 		for _, repoTC := range repositories {
 			// given
-			repoDir, cleanup := CloneRepo(t, repoTC.repo, "happy-path")
+			repoDir := SampleRepo(t, repoTC.repo, "happy-path")
 
 			tests := testCase{
 				{
@@ -118,8 +120,6 @@ func TestCheckSuccess(t *testing.T) {
 					g.Assert(t, t.Name(), []byte(normalizedOutput))
 				})
 			}
-
-			cleanup()
 		}
 	})
 
@@ -148,9 +148,10 @@ func TestCheckSuccess(t *testing.T) {
 		}
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
+				getEnvOrSkip(t, "GITHUB_TOKEN")
+
 				// given
-				repoDir, cleanup := CloneRepo(t, tc.repo, "happy-path")
-				defer cleanup()
+				repoDir := SampleRepo(t, tc.repo, "happy-path")
 
 				if runtime.GOOS == tc.skipOS {
 					t.Skip("this test is marked as skipped for this OS")
@@ -187,7 +188,8 @@ func TestCheckSuccess(t *testing.T) {
 // to the golden file.
 //
 // To update golden file, run:
-//   TEST=TestCheckFailures UPDATE_GOLDEN=true make test-integration
+//
+//	TEST=TestCheckFailures UPDATE_GOLDEN=true make test-integration
 func TestCheckFailures(t *testing.T) {
 	type Envs map[string]string
 	tests := []struct {
@@ -244,9 +246,12 @@ func TestCheckFailures(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			if _, needsToken := tc.envs["GITHUB_ACCESS_TOKEN"]; needsToken {
+				getEnvOrSkip(t, "GITHUB_TOKEN")
+			}
+
 			// given
-			repoDir, cleanup := CloneRepo(t, codeownersSamplesRepo, "failures")
-			defer cleanup()
+			repoDir := SampleRepo(t, codeownersSamplesRepo, "failures")
 
 			binaryPath := os.Getenv(binaryPathEnvName)
 
@@ -274,7 +279,8 @@ func TestCheckFailures(t *testing.T) {
 }
 
 // To update golden file, run:
-//  TEST=TestOwnerCheckAuthZAndAuthN TOKEN_WITH_NO_SCOPES=<token_with_no_scopes> UPDATE_GOLDEN=true make test-integration
+//
+//	TEST=TestOwnerCheckAuthZAndAuthN TOKEN_WITH_NO_SCOPES=<token_with_no_scopes> UPDATE_GOLDEN=true make test-integration
 func TestOwnerCheckAuthZAndAuthN(t *testing.T) {
 	t.Parallel()
 
@@ -331,7 +337,7 @@ func TestOwnerCheckAuthZAndAuthN(t *testing.T) {
 			WithEnv("REPOSITORY_PATH", "not-needed").
 			WithEnv("CHECKS", "owners").
 			WithEnv("OWNER_CHECKER_REPOSITORY", "gh-codeowners/codeowners-samples").
-			WithEnv("GITHUB_ACCESS_TOKEN", os.Getenv("TOKEN_WITH_NO_SCOPES"))
+			WithEnv("GITHUB_ACCESS_TOKEN", getEnvOrSkip(t, "TOKEN_WITH_NO_SCOPES"))
 
 		// when
 		result := codeownersCmd.AwaitResultAtMost(3 * time.Second)
@@ -353,7 +359,7 @@ func TestOwnerCheckAuthZAndAuthN(t *testing.T) {
 			WithEnv("REPOSITORY_PATH", "not-needed").
 			WithEnv("CHECKS", "owners").
 			WithEnv("OWNER_CHECKER_REPOSITORY", "gh-codeowners/private-repo").
-			WithEnv("GITHUB_ACCESS_TOKEN", os.Getenv("TOKEN_WITH_NO_SCOPES"))
+			WithEnv("GITHUB_ACCESS_TOKEN", getEnvOrSkip(t, "TOKEN_WITH_NO_SCOPES"))
 
 		// when
 		result := codeownersCmd.AwaitResultAtMost(3 * time.Second)
@@ -373,8 +379,8 @@ func TestGitHubAppAuth(t *testing.T) {
 	t.Parallel()
 
 	// given
-	repoDir, cleanup := CloneRepo(t, caseInsensitiveOrgCodeownersSamplesRepo, "happy-path")
-	defer cleanup()
+	privateKey := getEnvOrSkip(t, gitHubAppPrivateKeyEnvName)
+	repoDir := SampleRepo(t, caseInsensitiveOrgCodeownersSamplesRepo, "happy-path")
 
 	codeownersCmd := Exec().
 		Binary(os.Getenv(binaryPathEnvName)).
@@ -383,7 +389,7 @@ func TestGitHubAppAuth(t *testing.T) {
 		WithEnv("OWNER_CHECKER_REPOSITORY", "GitHubCODEOWNERS/codeowners-samples").
 		WithEnv("GITHUB_APP_ID", gitHubAppId).
 		WithEnv("GITHUB_APP_INSTALLATION_ID", gitHubAppInstallationId).
-		WithEnv("GITHUB_APP_PRIVATE_KEY", os.Getenv(gitHubAppPrivateKeyEnvName))
+		WithEnv("GITHUB_APP_PRIVATE_KEY", privateKey)
 
 	// when
 	result := codeownersCmd.AwaitResultAtMost(time.Minute)

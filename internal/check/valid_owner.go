@@ -7,7 +7,7 @@ import (
 	"net/mail"
 	"strings"
 
-	"go.szostok.io/codeowners-validator/internal/ctxutil"
+	"github.com/mlarraz/codeowners-validator/internal/ctxutil"
 
 	"github.com/google/go-github/v93/github"
 	"github.com/pkg/errors"
@@ -135,7 +135,7 @@ func isGitHubTeam(s string) bool {
 	hasPrefix := strings.HasPrefix(s, "@")
 	containsSlash := strings.Contains(s, "/")
 	split := strings.SplitN(s, "/", 3) // 3 is enough to confirm that is invalid + will not overflow the buffer
-	return hasPrefix && containsSlash && len(split) == 2 && len(split[1]) > 0
+	return hasPrefix && containsSlash && len(split) == 2 && split[1] != ""
 }
 
 func isGitHubUser(s string) bool {
@@ -161,7 +161,7 @@ func (v *ValidOwner) selectValidateFn(name string) func(context.Context, string)
 	case isGitHubUser(name):
 		return v.validateGitHubUser
 	case isEmailAddress(name):
-		// TODO(mszostok): try to check if e-mail really exists
+		// TODO: try to check if e-mail really exists
 		return func(context.Context, string) *validateError { return nil }
 	default:
 		return func(_ context.Context, name string) *validateError {
@@ -177,7 +177,7 @@ func (v *ValidOwner) initOrgListTeams(ctx context.Context) *validateError {
 	}
 	for {
 		resultPage, resp, err := v.ghClient.Teams.ListTeams(ctx, v.orgName, req)
-		if err != nil { // TODO(mszostok): implement retry?
+		if err != nil { // TODO: implement retry?
 			switch err := err.(type) {
 			case *github.ErrorResponse:
 				if err.Response.StatusCode == http.StatusUnauthorized {
@@ -235,10 +235,10 @@ func (v *ValidOwner) validateTeam(ctx context.Context, name string) *validateErr
 	}
 
 	// repo contains the permissions for the team slug given
-	// TODO(mszostok): Switch to GraphQL API, see:
-	//   https://github.com/mszostok/codeowners-validator/pull/62#discussion_r561273525
+	// TODO: switch to the GraphQL API, which resolves team repository
+	// permissions in a single request instead of the REST round trips below.
 	repo, _, err := v.ghClient.Teams.IsTeamRepoBySlug(ctx, v.orgName, team, org, v.orgRepoName)
-	if err != nil { // TODO(mszostok): implement retry?
+	if err != nil { // TODO: implement retry?
 		switch err := err.(type) {
 		case *github.ErrorResponse:
 			switch err.Response.StatusCode {
@@ -271,7 +271,7 @@ func (v *ValidOwner) validateTeam(ctx context.Context, name string) *validateErr
 }
 
 func (v *ValidOwner) validateGitHubUser(ctx context.Context, name string) *validateError {
-	if v.orgMembers == nil { // TODO(mszostok): lazy init, make it more robust.
+	if v.orgMembers == nil { // TODO: lazy init, make it more robust.
 		if err := v.initOrgListMembers(ctx); err != nil {
 			return newValidateError("Cannot initialize organization member list: %v", err).AsPermanent()
 		}
@@ -279,7 +279,7 @@ func (v *ValidOwner) validateGitHubUser(ctx context.Context, name string) *valid
 
 	userName := strings.TrimPrefix(name, "@")
 	_, _, err := v.ghClient.Users.Get(ctx, userName)
-	if err != nil { // TODO(mszostok): implement retry?
+	if err != nil { // TODO: implement retry?
 		switch err := err.(type) {
 		case *github.ErrorResponse:
 			if err.Response.StatusCode == http.StatusNotFound {

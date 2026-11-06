@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"go.szostok.io/codeowners-validator/internal/check"
+	"github.com/mlarraz/codeowners-validator/internal/check"
 )
 
 // writer used for test purpose

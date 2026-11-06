@@ -17,12 +17,13 @@ import (
 )
 
 var pattern string
+
 func init() {
 	curDir, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
-	pattern =  path.Join(curDir, "..", "..", "**", "*.md")
+	pattern = path.Join(curDir, "..", "..", "**", "*.md")
 	fmt.Println(pattern)
 }
 

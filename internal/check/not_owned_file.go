@@ -7,8 +7,8 @@ import (
 	"path"
 	"strings"
 
-	"go.szostok.io/codeowners-validator/internal/ctxutil"
-	"go.szostok.io/codeowners-validator/pkg/codeowners"
+	"github.com/mlarraz/codeowners-validator/internal/ctxutil"
+	"github.com/mlarraz/codeowners-validator/pkg/codeowners"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
@@ -128,7 +128,7 @@ func (c *NotOwnedFile) AppendToGitignoreFile(repoDir string, patterns []string) 
 	// ensure we are starting from new line
 	content.WriteString("\n")
 	for _, p := range patterns {
-		content.WriteString(fmt.Sprintf("%s\n", p))
+		fmt.Fprintf(&content, "%s\n", p)
 	}
 
 	_, err = f.WriteString(content.String())
