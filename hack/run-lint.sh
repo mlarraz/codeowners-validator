@@ -7,12 +7,18 @@ set -E         # needs to be set if we want the ERR trap
 
 CURRENT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT_PATH=$(cd "${CURRENT_DIR}/.." && pwd)
-GOLANGCI_LINT_VERSION="v1.55.2"
+GOLANGCI_LINT_VERSION="v2.15.0"
+# Tool images are pinned to an explicit release tag and digest so lint results
+# do not drift between runs. Bump the tag and its digest together.
+HADOLINT_IMAGE="hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d"
+SHELLCHECK_IMAGE="koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d"
 TMP_DIR=$(mktemp -d)
 
 readonly CURRENT_DIR
 readonly GOLANGCI_LINT_VERSION
+readonly HADOLINT_IMAGE
 readonly ROOT_PATH
+readonly SHELLCHECK_IMAGE
 readonly TMP_DIR
 
 # shellcheck source=./hack/lib/utilities.sh
@@ -26,10 +32,10 @@ host::install::golangci() {
 	export PATH="${TMP_DIR}/bin:${PATH}"
 
 	shout "Install the golangci-lint ${GOLANGCI_LINT_VERSION} locally to a tempdir..."
-  curl -sSfL -o "${TMP_DIR}/golangci-lint.sh" https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh
+	curl -sSfL -o "${TMP_DIR}/golangci-lint.sh" "https://raw.githubusercontent.com/golangci/golangci-lint/${GOLANGCI_LINT_VERSION}/install.sh"
 	chmod 700 "${TMP_DIR}/golangci-lint.sh"
 
-	"${TMP_DIR}/golangci-lint.sh" -b "${TMP_DIR}/bin" ${GOLANGCI_LINT_VERSION}
+	"${TMP_DIR}/golangci-lint.sh" -b "${TMP_DIR}/bin" "${GOLANGCI_LINT_VERSION}"
 
 	echo -e "${GREEN}√ install golangci-lint${NC}"
 }
@@ -40,8 +46,9 @@ golangci::run_checks() {
 		exit 1
 	fi
 
-	GOT_VER=$(golangci-lint version --format=short 2>&1)
-	if [[ "v${GOT_VER}" != "${GOLANGCI_LINT_VERSION}" ]]; then
+	GOT_VER=$(golangci-lint version --short 2>&1)
+	GOT_VER="v${GOT_VER#v}"
+	if [[ "${GOT_VER}" != "${GOLANGCI_LINT_VERSION}" ]]; then
 		echo -e "${RED}✗ golangci-lint version mismatch, expected ${GOLANGCI_LINT_VERSION}, available ${GOT_VER} ${NC}"
 		exit 1
 	fi
@@ -62,13 +69,13 @@ golangci::fix_if_requested() {
 
 docker::run_dockerfile_checks() {
 	shout "Run hadolint Dockerfile checks"
-	docker run --rm -i hadolint/hadolint <"${ROOT_PATH}/Dockerfile"
+	docker run --rm -i "${HADOLINT_IMAGE}" <"${ROOT_PATH}/Dockerfile"
 	echo -e "${GREEN}√ run hadolint${NC}"
 }
 
 shellcheck::run_checks() {
 	shout "Run shellcheck checks"
-	docker run --rm -v "$ROOT_PATH":/mnt koalaman/shellcheck:stable -x ./hack/*.sh
+	docker run --rm -v "$ROOT_PATH":/mnt "${SHELLCHECK_IMAGE}" -x ./hack/*.sh
 	echo -e "${GREEN}√ run shellcheck${NC}"
 }
 
