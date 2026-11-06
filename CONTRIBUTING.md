@@ -9,11 +9,11 @@ This document contains contribution guidelines for this repository. Read it befo
 
 ## Contributing
 
-Before proposing or adding changes, check the [existing issues](https://github.com/mszostok/codeowners-validator/issues) and make sure the discussion/work has not already been started to avoid duplication. 
+Before proposing or adding changes, check the [existing issues](https://github.com/mlarraz/codeowners-validator/issues) and make sure the discussion/work has not already been started to avoid duplication. 
 
-If you'd like to see a new feature implemented, use this [feature request template](https://github.com/mszostok/codeowners-validator/issues/new?assignees=&labels=&template=feature_request.md) to create an issue. 
+If you'd like to see a new feature implemented, use this [feature request template](https://github.com/mlarraz/codeowners-validator/issues/new?assignees=&labels=&template=feature_request.md) to create an issue. 
 
-Similarly, if you spot a bug, use this [bug report template](https://github.com/mszostok/codeowners-validator/issues/new?assignees=mszostok&labels=bug&template=bug_report.md) to let us know!
+Similarly, if you spot a bug, use this [bug report template](https://github.com/mlarraz/codeowners-validator/issues/new?assignees=&labels=bug&template=bug_report.md) to let us know!
 
 ### Ready for action? Start developing! 
 
@@ -28,7 +28,7 @@ To start contributing, follow these steps:
 3. Set the `codeowners-validator` repository as upstream:
 
     ```bash
-    git remote add upstream git@github.com:mszostok/codeowners-validator.git
+    git remote add upstream git@github.com:mlarraz/codeowners-validator.git
     ```
    
 4. Fetch all the remote branches for this repository:

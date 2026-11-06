@@ -8,7 +8,7 @@ inputs:
     required: false
 
   github_app_id:
-    description: "Github App ID for authentication. This replaces the GITHUB_ACCESS_TOKEN. Instruction for creating a Github App can be found here: https://github.com/mszostok/codeowners-validator/blob/main/docs/gh-token.md"
+    description: "Github App ID for authentication. This replaces the GITHUB_ACCESS_TOKEN. Instruction for creating a Github App can be found here: https://github.com/mlarraz/codeowners-validator/blob/main/docs/gh-auth.md"
     required: false
 
   github_app_installation_id:
@@ -80,7 +80,7 @@ inputs:
 
 runs:
   using: 'docker'
-  image: 'docker://ghcr.io/mlarraz/codeowners-validator:v0.8.1'
+  image: 'docker://ghcr.io/mlarraz/codeowners-validator:v0.8.0'
   env:
     ENVS_PREFIX: "INPUT"
 

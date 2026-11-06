@@ -20,7 +20,7 @@ This document contains development instructions. Read it to learn how to develop
 
 ## Prerequisites
 
-* [Go](https://golang.org/dl/) 1.15 or higher
+* [Go](https://golang.org/dl/) 1.27.3 or higher
 * [Docker](https://www.docker.com/)
 * Make
 
@@ -71,10 +71,9 @@ make fix-lint-issues
 
 ### Integration tests
 
-This project supports the integration tests that are defined in the [tests](../tests) package. The tests are executed against [`gh-codeowners/codeowners-samples`](https://github.com/gh-codeowners/codeowners-samples).
+This project supports the integration tests that are defined in the [tests](../tests/integration) package. The offline checks run against the sample repositories in [testdata/repos](../tests/integration/testdata/repos), one directory per GitHub organization and one subdirectory per scenario.
 
-> **CAUTION:** Currently, running the integration tests both on external PRs and locally by external contributors is not supported, as the teams used for testing are visible only to the organization members. 
-> At the moment, the `codeowners-validator` repository owner is responsible for running these tests. 
+The `owners` check queries the teams of the `gh-codeowners` and `GitHubCODEOWNERS` organizations, which are visible only to their members. The tests for it read credentials from the `GITHUB_TOKEN`, `TOKEN_WITH_NO_SCOPES`, and `APP_PRIVATE_KEY` environment variables and are skipped when those aren't set.
 
 ## Build a binary
 
