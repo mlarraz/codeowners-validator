@@ -2,23 +2,28 @@
 
 # Release process
 
-The release of the codeowners-validator tool is performed by the [GoReleaser](https://github.com/goreleaser/goreleaser) which builds Go binaries for several platforms and then creates a GitHub release.
+Releases are built by the [Release](../.github/workflows/release.yml) workflow, which runs [GoReleaser](https://goreleaser.com/) with the [.goreleaser.yml](../.goreleaser.yml) configuration whenever a `v*` tag is pushed.
 
 **Process**
 
-1. Export GITHUB_TOKEN=`YOUR_GH_TOKEN`
+1. Point the GitHub Action at the image of the new version. The action runs the `ghcr.io/mlarraz/codeowners-validator` image tag set in the `image` field of [action.yml](../action.yml):
 
-2. Tag commit 
+   ```yaml
+   image: 'docker://ghcr.io/mlarraz/codeowners-validator:v0.9.0'
+   ```
+
+   Update the version in the examples in the [README](../README.md), [gh-action.md](./gh-action.md), and [gh-auth.md](./gh-auth.md) as well, and commit the changes to `main`.
+
+2. Tag the commit and push the tag:
+
    ```bash
-   git tag -a v0.1.0 -m "First release"
-   ```         
+   git tag -a v0.9.0 -m "v0.9.0"
+   git push origin v0.9.0
+   ```
 
-3. Push tag
-    ```
-    git push origin v0.1.0
-    ```
+3. Wait for the [Release workflow run](https://github.com/mlarraz/codeowners-validator/actions/workflows/release.yml) to finish. It:
+   - builds the binaries for Linux, macOS, and Windows, and uploads the archives with a `checksums.txt` file,
+   - pushes a `linux/amd64` and `linux/arm64` image to `ghcr.io/mlarraz/codeowners-validator`, tagged `v0.9.0`, `v0.9`, `v0`, and `stable`,
+   - creates a draft GitHub release with a changelog of the commits since the previous tag.
 
-4. Locally from the root of the repository, run `goreleaser`.
-   >**NOTE:** Currently, releases are made with goreleaser in version `0.104.0, commit 7c4352147b6d9636f13d2fc633cfab05d82d929c, built at 2019-03-20T02:18:40Z`
-   
-5. Recheck release generated on GitHub. 
+4. Review the draft on the [releases page](https://github.com/mlarraz/codeowners-validator/releases) and publish it. To list the release on GitHub Marketplace, select **Publish this Action to the GitHub Marketplace** before publishing.

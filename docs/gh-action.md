@@ -9,11 +9,20 @@
 </p>
 
 ##
-The [Codeowners Validator](https://github.com/mszostok/codeowners-validator) is available as a GitHub Action.
+The [Codeowners Validator](https://github.com/mlarraz/codeowners-validator) is available as a GitHub Action. It prints a report like this:
 
-<p align="center">
-    <img src="https://raw.githack.com/mszostok/codeowners-validator/main/docs/assets/action-output.png" width="600px" alt="demo">
-</p>
+```text
+==> Executing Duplicated Pattern Checker (63.375µs)
+    Check OK
+==> Executing Valid Syntax Checker (34.542µs)
+    Check OK
+==> Executing File Exist Checker (5.030625ms)
+    Check OK
+==> Executing [Experimental] Not Owned File Checker (118.596ms)
+    Check OK
+
+4 check(s) executed, no failure(s)
+```
 
 
 ## Usage
@@ -33,9 +42,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Checks-out your repository, which is validated in the next step
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v7
       - name: GitHub CODEOWNERS Validator
-        uses: mszostok/codeowners-validator@v0.7.4
+        uses: mlarraz/codeowners-validator@v0.8.0
         # input parameters
         with:
           # ==== GitHub Auth ====
