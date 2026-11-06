@@ -1,3 +1,5 @@
+version: 2
+
 builds:
   - id: codeowners-validator
     env:
@@ -12,44 +14,33 @@ builds:
       - arm64
     ldflags:
       - -s -w -X go.szostok.io/version.version={{.Version}} -X go.szostok.io/version.buildDate={{.Date}}
-    # List of combinations of GOOS + GOARCH + GOARM to ignore.
-    # Default is empty.
-    ignore:
-      - goos: windows # due to upx error: CantPackException: can't pack new-exe
-        goarch: arm64
-    hooks:
-      # Install upx first, https://github.com/upx/upx/releases
-      post: upx -9 "{{ .Path }}"
 
 archives:
-  - replacements:
-      darwin: Darwin
-      linux: Linux
-      windows: Windows
-      386: i386
-      amd64: x86_64
+  - name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ title .Os }}_{{ if eq .Arch "amd64" }}x86_64{{ else if eq .Arch "386" }}i386{{ else }}{{ .Arch }}{{ end }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
-dockers:
-  - dockerfile: Dockerfile
-    ids:
+dockers_v2:
+  - ids:
       - codeowners-validator
-    image_templates:
-      - "ghcr.io/mszostok/codeowners-validator:stable"
-      - "ghcr.io/mszostok/codeowners-validator:{{ .Tag }}"
-      - "ghcr.io/mszostok/codeowners-validator:v{{ .Major }}.{{ .Minor }}"
-      - "ghcr.io/mszostok/codeowners-validator:v{{ .Major }}"
-      - "mszostok/codeowners-validator:latest"
-      - "mszostok/codeowners-validator:{{ .Tag }}"
-      - "mszostok/codeowners-validator:v{{ .Major }}.{{ .Minor }}"
+    images:
+      - "ghcr.io/mlarraz/codeowners-validator"
+    tags:
+      - "stable"
+      - "{{ .Tag }}"
+      - "v{{ .Major }}.{{ .Minor }}"
+      - "v{{ .Major }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
 
 checksum:
   name_template: 'checksums.txt'
 
 snapshot:
-  name_template: "{{ .Tag }}-next"
+  version_template: "{{ .Tag }}-next"
 
 changelog:
   use: github
@@ -64,22 +55,3 @@ release:
   # If set to true, will not auto-publish the release.
   # Default is false.
   draft: true
-  # Repo in which the release will be created.
-  # Default is extracted from the origin remote URL or empty if its private hosted.
-  github:
-    owner: mszostok
-    name: codeowners-validator
-
-brews:
-  - name: codeowners-validator
-    homepage: https://github.com/mszostok/codeowners-validator
-    description: Ensures the correctness of your CODEOWNERS file.
-    license: "Apache License 2.0"
-    tap:
-      owner: mszostok
-      name: homebrew-tap
-    commit_author:
-      name: Mateusz Szostok
-      email: szostok.mateusz@gmail.com
-    test: |
-      system "#{bin}/codeowners-validator -v --short"

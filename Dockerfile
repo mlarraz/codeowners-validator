@@ -1,14 +1,16 @@
 # Get latest CA certs & git
-FROM alpine:3.19 as deps
+FROM alpine:3.24 AS deps
 
 # hadolint ignore=DL3018
 RUN apk --no-cache add ca-certificates git
 
 FROM scratch
 
-LABEL org.opencontainers.image.source=https://github.com/mszostok/codeowners-validator
+ARG TARGETPLATFORM
 
-COPY ./codeowners-validator /codeowners-validator
+LABEL org.opencontainers.image.source=https://github.com/mlarraz/codeowners-validator
+
+COPY $TARGETPLATFORM/codeowners-validator /codeowners-validator
 
 COPY --from=deps /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=deps /usr/bin/git /usr/bin/git
