@@ -1,4 +1,4 @@
-==> Executing [Experimental] Not Owned File Checker (<duration>)
+==> Executing Not Owned File Checker (<duration>)
     [err] Found 4 not owned files (skipped patterns: "*"):
             * .gitignore
             * CODEOWNERS

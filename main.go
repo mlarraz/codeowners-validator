@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -23,10 +24,12 @@ import (
 
 // Config holds the application configuration
 type Config struct {
-	RepositoryPath     string
-	CheckFailureLevel  check.SeverityType `envconfig:"default=warning"`
-	Checks             []string           `envconfig:"optional"`
-	ExperimentalChecks []string           `envconfig:"optional"`
+	RepositoryPath    string
+	CheckFailureLevel check.SeverityType `envconfig:"default=warning"`
+	Checks            []string           `envconfig:"optional"`
+	// ExperimentalChecks was removed when its checks became regular checks. It's still read so that
+	// setting it fails instead of silently not running the checks.
+	ExperimentalChecks []string `envconfig:"optional"`
 	// TrustWorkspace marks the repository as a safe directory for Git, which is needed when it's
 	// owned by another user, for example when it's mounted into a container.
 	TrustWorkspace bool `envconfig:"default=false"`
@@ -78,11 +81,14 @@ func NewRoot() *cobra.Command {
 			var cfg Config
 			err := envconfig.Init(&cfg)
 			exitOnError(err)
+			if len(cfg.ExperimentalChecks) > 0 {
+				exitOnError(errors.New("EXPERIMENTAL_CHECKS (the experimental_checks input of the GitHub Action) was removed: notowned and avoid-shadowing are regular checks now, list them in CHECKS (checks)"))
+			}
 
 			log := logrus.New()
 
 			// init checks
-			checks, err := load.Checks(cmd.Context(), cfg.Checks, cfg.ExperimentalChecks)
+			checks, err := load.Checks(cmd.Context(), cfg.Checks)
 			exitOnError(err)
 
 			// init codeowners entries

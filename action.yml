@@ -29,12 +29,12 @@ inputs:
     required: false
 
   experimental_checks:
-    description: "The comma-separated list of experimental checks that should be executed. By default, all experimental checks are turned off. Possible values: notowned."
+    description: "Removed: notowned and avoid-shadowing are regular checks, list them in checks instead. Setting it fails the action."
     default: ""
     required: false
 
   checks:
-    description: "The list of checks that will be executed. By default, all checks are executed. Possible values: files,owners,duppatterns,syntax"
+    description: "The comma-separated list of checks to run. Defaults to syntax,duppatterns,files,owners. Possible values: syntax,duppatterns,files,owners,notowned,avoid-shadowing"
     required: false
     default: ""
 
