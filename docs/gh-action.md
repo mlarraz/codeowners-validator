@@ -121,6 +121,10 @@ The best is to run this as a cron job and not only if you applying changes to CO
 >
 > The `owners` check uses the workflow's `GITHUB_TOKEN`, which needs the `contents: read` permission. See [GitHub authentication](./gh-auth.md) for tokens and GitHub Apps.
 
+## Annotations and job summary
+
+In GitHub Actions, where `GITHUB_ACTIONS` is `true`, the validator also reports every issue as an [annotation](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) on the CODEOWNERS file, so that pull requests show the issues on the lines they refer to, and adds a table of the results to the [job summary](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#adding-a-job-summary). GitHub limits the number of annotations it shows, and the job summary truncates very long outputs, such as thousands of not owned files; the job log always has every issue.
+
 ## Checkout
 
 No check reads the contents of any file but CODEOWNERS:

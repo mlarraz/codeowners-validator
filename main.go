@@ -15,6 +15,7 @@ import (
 	"github.com/mlarraz/codeowners-validator/internal/check"
 	"github.com/mlarraz/codeowners-validator/internal/envconfig"
 	"github.com/mlarraz/codeowners-validator/internal/load"
+	"github.com/mlarraz/codeowners-validator/internal/printer"
 	"github.com/mlarraz/codeowners-validator/internal/repo"
 	"github.com/mlarraz/codeowners-validator/internal/runner"
 	"github.com/mlarraz/codeowners-validator/pkg/codeowners"
@@ -99,8 +100,10 @@ func NewRoot() *cobra.Command {
 				CodeownersEntries: codeowners.ParseCodeowners(bytes.NewReader(content)),
 				CodeownersSize:    int64(len(content)),
 			}
+			p, err := newPrinter(codeownersPath)
+			exitOnError(err)
 
-			checkRunner := runner.NewCheckRunner(log, in, cfg.CheckFailureLevel, checks...)
+			checkRunner := runner.NewCheckRunner(log, in, cfg.CheckFailureLevel, p, checks...)
 			checkRunner.Run(cmd.Context())
 
 			if cmd.Context().Err() != nil {
@@ -118,4 +121,18 @@ func NewRoot() *cobra.Command {
 	)
 
 	return rootCmd
+}
+
+// newPrinter returns the printer for the check results. In GitHub Actions, the results are also
+// reported as annotations on the CODEOWNERS file and added to the job summary.
+func newPrinter(codeownersPath string) (runner.Printer, error) {
+	if os.Getenv("GITHUB_ACTIONS") != "true" {
+		return &printer.TTYPrinter{}, nil
+	}
+
+	file, err := filepath.Abs(codeownersPath)
+	if err != nil {
+		return nil, err
+	}
+	return printer.NewGitHubActionsPrinter(file, os.Getenv("GITHUB_STEP_SUMMARY")), nil
 }
