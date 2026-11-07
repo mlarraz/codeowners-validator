@@ -7,6 +7,7 @@ import (
 
 	"github.com/mlarraz/codeowners-validator/internal/check"
 	"github.com/mlarraz/codeowners-validator/internal/printer"
+	"github.com/mlarraz/codeowners-validator/internal/repo"
 	"github.com/mlarraz/codeowners-validator/pkg/codeowners"
 
 	"github.com/sirupsen/logrus"
@@ -31,7 +32,7 @@ type CheckRunner struct {
 	m                  sync.RWMutex
 	log                logrus.FieldLogger
 	codeowners         []codeowners.Entry
-	repoPath           string
+	repo               *repo.Repo
 	treatedAsFailure   check.SeverityType
 	checks             []check.Checker
 	printer            Printer
@@ -40,10 +41,10 @@ type CheckRunner struct {
 }
 
 // NewCheckRunner is a constructor for CheckRunner
-func NewCheckRunner(log logrus.FieldLogger, co []codeowners.Entry, repoPath string, treatedAsFailure check.SeverityType, checks ...check.Checker) *CheckRunner {
+func NewCheckRunner(log logrus.FieldLogger, co []codeowners.Entry, repository *repo.Repo, treatedAsFailure check.SeverityType, checks ...check.Checker) *CheckRunner {
 	return &CheckRunner{
 		log:              log.WithField("service", "check:runner"),
-		repoPath:         repoPath,
+		repo:             repository,
 		treatedAsFailure: treatedAsFailure,
 		codeowners:       co,
 		checks:           checks,
@@ -65,7 +66,7 @@ func (r *CheckRunner) Run(ctx context.Context) {
 			startTime := time.Now()
 			out, err := c.Check(ctx, check.Input{
 				CodeownersEntries: r.codeowners,
-				RepoDir:           r.repoPath,
+				Repo:              r.repo,
 			})
 
 			r.collectMetrics(out, err)

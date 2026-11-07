@@ -3,12 +3,9 @@ package check
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/mlarraz/codeowners-validator/internal/ctxutil"
 
-	"github.com/mattn/go-zglob"
 	"github.com/pkg/errors"
 )
 
@@ -19,40 +16,41 @@ func NewFileExist() *FileExist {
 }
 
 func (f *FileExist) Check(ctx context.Context, in Input) (Output, error) {
+	if ctxutil.ShouldExit(ctx) {
+		return Output{}, ctx.Err()
+	}
+
+	files, err := in.Repo.Files(ctx)
+	if err != nil {
+		return Output{}, errors.Wrap(err, "while listing the files of the repository")
+	}
+
 	var bldr OutputBuilder
 
-	for _, entry := range in.CodeownersEntries {
+	matcher := newPathMatcher(files, in.CodeownersEntries)
+	for i := range matcher.rules {
+		p := &matcher.rules[i]
 		if ctxutil.ShouldExit(ctx) {
 			return Output{}, ctx.Err()
 		}
 
-		fullPath := filepath.Join(in.RepoDir, f.fnmatchPattern(entry.Pattern))
-		matches, err := zglob.Glob(fullPath)
 		switch {
-		case err == nil:
-		case errors.Is(err, os.ErrNotExist):
-			msg := fmt.Sprintf("%q does not match any files in repository", entry.Pattern)
-			bldr.ReportIssue(msg, WithEntry(entry))
-			continue
+		case p.err != nil:
+			msg := fmt.Sprintf("%q is not a valid CODEOWNERS pattern: %s", p.entry.Pattern, p.err)
+			bldr.ReportIssue(msg, WithEntry(p.entry))
 		default:
-			return Output{}, errors.Wrapf(err, "while checking if there is any file in %s matching pattern %s", in.RepoDir, entry.Pattern)
-		}
-
-		if len(matches) == 0 {
-			msg := fmt.Sprintf("%q does not match any files in repository", entry.Pattern)
-			bldr.ReportIssue(msg, WithEntry(entry))
+			matched, err := matcher.matchesAny(p)
+			if err != nil {
+				return Output{}, errors.Wrapf(err, "while matching pattern %s", p.entry.Pattern)
+			}
+			if !matched {
+				msg := fmt.Sprintf("%q does not match any files in repository", p.entry.Pattern)
+				bldr.ReportIssue(msg, WithEntry(p.entry))
+			}
 		}
 	}
 
 	return bldr.Output(), nil
-}
-
-func (*FileExist) fnmatchPattern(pattern string) string {
-	if len(pattern) >= 2 && pattern[:1] == "*" && pattern[1:2] != "*" {
-		return "**/" + pattern
-	}
-
-	return pattern
 }
 
 func (*FileExist) Name() string {

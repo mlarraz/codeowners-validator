@@ -6,12 +6,14 @@ package integration
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
 
 	"github.com/sebdah/goldie/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -274,6 +276,65 @@ func TestCheckFailures(t *testing.T) {
 
 			g := goldie.New(t, goldie.WithNameSuffix(".golden.txt"))
 			g.Assert(t, t.Name(), []byte(normalizedOutput))
+		})
+	}
+}
+
+// TestCheckSparseBloblessClone tests that the checks that inspect the files of the repository
+// don't need a full checkout: a blobless clone that contains only the CODEOWNERS file gives the
+// same result as the full checkout.
+func TestCheckSparseBloblessClone(t *testing.T) {
+	t.Parallel()
+
+	repoDir := SampleRepo(t, codeownersSamplesRepo, "failures")
+	cloneDir := BloblessSparseClone(t, repoDir, "CODEOWNERS")
+	require.NoFileExists(t, filepath.Join(cloneDir, "action.yml"))
+
+	tests := []struct {
+		name         string
+		envs         map[string]string
+		wantContains string
+	}{
+		{
+			name: "files",
+			envs: map[string]string{
+				"PATH":   os.Getenv("PATH"), // need to be set to find the `git` binary
+				"CHECKS": "files",
+			},
+			wantContains: `"/this-folder-does-not-exits/really" does not match any files in repository`,
+		},
+		{
+			name: "notowned",
+			envs: map[string]string{
+				"PATH":                            os.Getenv("PATH"), // need to be set to find the `git` binary
+				"CHECKS":                          "disable-all",
+				"EXPERIMENTAL_CHECKS":             "notowned",
+				"NOT_OWNED_CHECKER_SKIP_PATTERNS": "*",
+			},
+			wantContains: "Found 4 not owned files",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			run := func(dir string) *ExecuteOutput {
+				codeownersCmd := Exec().
+					Binary(os.Getenv(binaryPathEnvName)).
+					WithEnv("REPOSITORY_PATH", dir)
+
+				for k, v := range tc.envs {
+					codeownersCmd.WithEnv(k, v)
+				}
+				return codeownersCmd.AwaitResultAtMost(time.Minute)
+			}
+
+			// when
+			full := run(repoDir)
+			sparse := run(cloneDir)
+
+			// then
+			assert.Contains(t, sparse.Stdout, tc.wantContains)
+			assert.Equal(t, normalizeTimeDurations(full.Stdout), normalizeTimeDurations(sparse.Stdout))
 		})
 	}
 }

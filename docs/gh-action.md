@@ -41,8 +41,12 @@ jobs:
   sanity:
     runs-on: ubuntu-latest
     steps:
-      # Checks-out your repository, which is validated in the next step
+      # Checks out only the CODEOWNERS file, see "Checkout" below
       - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/CODEOWNERS
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: GitHub CODEOWNERS Validator
         uses: mlarraz/codeowners-validator@v0.8.0
         # input parameters
@@ -80,6 +84,9 @@ jobs:
           # The repository path in which CODEOWNERS file should be validated."
           repository_path: "."
 
+          # Specifies whether Git should trust the repository path. The action's container runs as a different user than the one that owns the checkout.
+          trust_workspace: "true"
+
           # Defines the level on which the application should treat check issues as failures. Defaults to warning, which treats both errors and warnings as failures, and exits with error code 3. Possible values are error and warning. Default: warning"
           check_failure_level: "warning"
 
@@ -107,6 +114,15 @@ The best is to run this as a cron job and not only if you applying changes to CO
 > **Note**
 >
 > To execute `owners` check you need to create a [GitHub token](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/#creating-a-token) and store it as a secret in your repository, see ["Creating and storing encrypted secrets."](https://help.github.com/en/actions/configuring-and-managing-workflows/creating-and-storing-encrypted-secrets). Token requires only read-only scope for your repository.
+
+## Checkout
+
+No check reads the contents of any file but CODEOWNERS:
+
+- `syntax`, `duppatterns`, `avoid-shadowing`, and `owners` read the CODEOWNERS file.
+- `files` and `notowned` read the list of tracked files from Git's index.
+
+A sparse checkout of the CODEOWNERS file is therefore enough, however big the repository is. `actions/checkout` makes sparse checkouts blobless (`--filter=blob:none`), so it downloads the file tree of the commit but none of the other files. Turn off cone mode so that only the CODEOWNERS file is checked out.
 
 <!--- example repository when failed -->
 

@@ -14,6 +14,7 @@ import (
 	"github.com/mlarraz/codeowners-validator/internal/check"
 	"github.com/mlarraz/codeowners-validator/internal/envconfig"
 	"github.com/mlarraz/codeowners-validator/internal/load"
+	"github.com/mlarraz/codeowners-validator/internal/repo"
 	"github.com/mlarraz/codeowners-validator/internal/runner"
 	"github.com/mlarraz/codeowners-validator/pkg/codeowners"
 )
@@ -24,6 +25,9 @@ type Config struct {
 	CheckFailureLevel  check.SeverityType `envconfig:"default=warning"`
 	Checks             []string           `envconfig:"optional"`
 	ExperimentalChecks []string           `envconfig:"optional"`
+	// TrustWorkspace marks the repository as a safe directory for Git, which is needed when it's
+	// owned by another user, for example when it's mounted into a container.
+	TrustWorkspace bool `envconfig:"default=false"`
 }
 
 func main() {
@@ -87,7 +91,7 @@ func NewRoot() *cobra.Command {
 			absRepoPath, err := filepath.Abs(cfg.RepositoryPath)
 			exitOnError(err)
 
-			checkRunner := runner.NewCheckRunner(log, codeownersEntries, absRepoPath, cfg.CheckFailureLevel, checks...)
+			checkRunner := runner.NewCheckRunner(log, codeownersEntries, repo.New(absRepoPath, cfg.TrustWorkspace), cfg.CheckFailureLevel, checks...)
 			checkRunner.Run(cmd.Context())
 
 			if cmd.Context().Err() != nil {
