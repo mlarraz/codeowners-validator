@@ -3,23 +3,15 @@ package check
 import (
 	"context"
 	"fmt"
-	"os"
-	"path"
+	"sort"
 	"strings"
 
 	"github.com/mlarraz/codeowners-validator/internal/ctxutil"
-	"github.com/mlarraz/codeowners-validator/pkg/codeowners"
 
-	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
-	"gopkg.in/pipe.v2"
 )
 
 type NotOwnedFileConfig struct {
-	// TrustWorkspace sets the global gif config
-	// to trust a given repository path
-	// see: https://github.com/actions/checkout/issues/766
-	TrustWorkspace bool     `envconfig:"default=false"`
 	SkipPatterns   []string `envconfig:"optional"`
 	Subdirectories []string `envconfig:"optional"`
 }
@@ -27,7 +19,6 @@ type NotOwnedFileConfig struct {
 type NotOwnedFile struct {
 	skipPatterns   map[string]struct{}
 	subDirectories []string
-	trustWorkspace bool
 }
 
 func NewNotOwnedFile(cfg NotOwnedFileConfig) *NotOwnedFile {
@@ -39,11 +30,10 @@ func NewNotOwnedFile(cfg NotOwnedFileConfig) *NotOwnedFile {
 	return &NotOwnedFile{
 		skipPatterns:   skip,
 		subDirectories: cfg.Subdirectories,
-		trustWorkspace: cfg.TrustWorkspace,
 	}
 }
 
-func (c *NotOwnedFile) Check(ctx context.Context, in Input) (output Output, err error) {
+func (c *NotOwnedFile) Check(ctx context.Context, in Input) (Output, error) {
 	if ctxutil.ShouldExit(ctx) {
 		return Output{}, ctx.Err()
 	}
@@ -55,160 +45,45 @@ func (c *NotOwnedFile) Check(ctx context.Context, in Input) (output Output, err 
 		return bldr.Output(), nil
 	}
 
-	patterns := c.patternsToBeIgnored(in.CodeownersEntries)
-
-	if err := c.trustWorkspaceIfNeeded(in.RepoDir); err != nil {
-		return Output{}, err
-	}
-
-	statusOut, err := c.GitCheckStatus(in.RepoDir)
+	files, err := in.Repo.Files(ctx)
 	if err != nil {
-		return Output{}, err
-	}
-	if len(statusOut) != 0 {
-		bldr.ReportIssue("git state is dirty: commit all changes before executing this check")
-		return bldr.Output(), nil
+		return Output{}, errors.Wrap(err, "while listing the files of the repository")
 	}
 
-	defer func() {
-		errReset := c.GitResetCurrentBranch(in.RepoDir)
-		if err != nil {
-			output = Output{}
-			err = multierror.Append(err, errReset).ErrorOrNil()
-		}
-	}()
-
-	err = c.AppendToGitignoreFile(in.RepoDir, patterns)
+	matcher := newPathMatcher(files, in.CodeownersEntries)
+	notOwned, err := matcher.notOwned(ctx, c.isConsidered, c.isInSubdirectories)
 	if err != nil {
-		return Output{}, err
+		return Output{}, errors.Wrap(err, "while looking for files that don't have any owner")
 	}
 
-	err = c.GitRemoveIgnoredFiles(in.RepoDir)
-	if err != nil {
-		return Output{}, err
-	}
-
-	out, err := c.GitListFiles(in.RepoDir)
-	if err != nil {
-		return Output{}, err
-	}
-
-	lsOut := strings.TrimSpace(out)
-	if lsOut != "" {
-		lines := strings.Split(lsOut, "\n")
-		msg := fmt.Sprintf("Found %d not owned files (skipped patterns: %q):\n%s", len(lines), c.skipPatternsList(), c.ListFormatFunc(lines))
+	if len(notOwned) > 0 {
+		msg := fmt.Sprintf("Found %d not owned files (skipped patterns: %q):\n%s", len(notOwned), c.skipPatternsList(), c.ListFormatFunc(notOwned))
 		bldr.ReportIssue(msg)
 	}
 
 	return bldr.Output(), nil
 }
 
-func (c *NotOwnedFile) patternsToBeIgnored(entries []codeowners.Entry) []string {
-	var patterns []string
-	for _, entry := range entries {
-		if _, found := c.skipPatterns[entry.Pattern]; found {
-			continue
+// isConsidered reports whether the entry takes part in the check. Skipped patterns are ignored,
+// which turns the files that they match into not owned files.
+func (c *NotOwnedFile) isConsidered(p *pathPattern) bool {
+	_, skipped := c.skipPatterns[p.entry.Pattern]
+	return !skipped
+}
+
+// isInSubdirectories reports whether the file is under one of the configured subdirectories.
+func (c *NotOwnedFile) isInSubdirectories(file string) bool {
+	if len(c.subDirectories) == 0 {
+		return true
+	}
+
+	for _, dir := range c.subDirectories {
+		dir = strings.TrimSuffix(strings.TrimPrefix(dir, "./"), "/")
+		if dir == "" || dir == "." || file == dir || strings.HasPrefix(file, dir+"/") {
+			return true
 		}
-		patterns = append(patterns, entry.Pattern)
 	}
-
-	return patterns
-}
-
-func (c *NotOwnedFile) AppendToGitignoreFile(repoDir string, patterns []string) error {
-	f, err := os.OpenFile(path.Join(repoDir, ".gitignore"),
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-
-	defer f.Close()
-
-	content := strings.Builder{}
-	// ensure we are starting from new line
-	content.WriteString("\n")
-	for _, p := range patterns {
-		fmt.Fprintf(&content, "%s\n", p)
-	}
-
-	_, err = f.WriteString(content.String())
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *NotOwnedFile) GitRemoveIgnoredFiles(repoDir string) error {
-	gitrm := pipe.Script(
-		pipe.ChDir(repoDir),
-		pipe.Line(
-			pipe.Exec("git", "ls-files", "-ci", "--exclude-standard", "-z"),
-			pipe.Exec("xargs", "-0", "-r", "git", "rm", "--cached"),
-		),
-	)
-
-	_, stderr, err := pipe.DividedOutput(gitrm)
-	if err != nil {
-		return errors.Wrap(err, string(stderr))
-	}
-	return nil
-}
-
-func (c *NotOwnedFile) GitCheckStatus(repoDir string) ([]byte, error) {
-	gitstate := pipe.Script(
-		pipe.ChDir(repoDir),
-		pipe.Exec("git", "status", "--porcelain"),
-	)
-
-	out, stderr, err := pipe.DividedOutput(gitstate)
-	if err != nil {
-		return nil, errors.Wrap(err, string(stderr))
-	}
-
-	return out, nil
-}
-
-func (c *NotOwnedFile) GitResetCurrentBranch(repoDir string) error {
-	gitreset := pipe.Script(
-		pipe.ChDir(repoDir),
-		pipe.Exec("git", "reset", "--hard"),
-	)
-	_, stderr, err := pipe.DividedOutput(gitreset)
-	if err != nil {
-		return errors.Wrap(err, string(stderr))
-	}
-	return nil
-}
-
-func (c *NotOwnedFile) GitListFiles(repoDir string) (string, error) {
-	args := []string{"ls-files"}
-	args = append(args, c.subDirectories...)
-
-	gitls := pipe.Script(
-		pipe.ChDir(repoDir),
-		pipe.Exec("git", args...),
-	)
-
-	stdout, stderr, err := pipe.DividedOutput(gitls)
-	if err != nil {
-		return "", errors.Wrap(err, string(stderr))
-	}
-
-	return string(stdout), nil
-}
-
-func (c *NotOwnedFile) trustWorkspaceIfNeeded(repo string) error {
-	if !c.trustWorkspace {
-		return nil
-	}
-
-	gitadd := pipe.Exec("git", "config", "--global", "--add", "safe.directory", repo)
-	_, stderr, err := pipe.DividedOutput(gitadd)
-	if err != nil {
-		return errors.Wrap(err, string(stderr))
-	}
-
-	return nil
+	return false
 }
 
 func (c *NotOwnedFile) skipPatternsList() string {
@@ -216,6 +91,7 @@ func (c *NotOwnedFile) skipPatternsList() string {
 	for k := range c.skipPatterns {
 		list = append(list, k)
 	}
+	sort.Strings(list)
 	return strings.Join(list, ",")
 }
 

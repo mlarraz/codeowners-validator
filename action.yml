@@ -73,8 +73,8 @@ inputs:
     description: "Only check listed subdirectories for CODEOWNERS ownership that don't have owners."
     required: false
 
-  not_owned_checker_trust_workspace:
-    description: "Specifies whether the repository path should be marked as safe. See: https://github.com/actions/checkout/issues/766"
+  trust_workspace:
+    description: "Specifies whether Git should trust the repository path. The action's container runs as a different user than the one that owns the checkout, so Git refuses to read the repository without it. See: https://github.com/actions/checkout/issues/766"
     required: false
     default: "true"
 

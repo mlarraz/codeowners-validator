@@ -7,8 +7,7 @@ require (
 	github.com/dustin/go-humanize v1.1.0
 	github.com/fatih/color v1.19.0
 	github.com/google/go-github/v93 v93.0.0
-	github.com/hashicorp/go-multierror v1.1.1
-	github.com/mattn/go-zglob v0.0.8
+	github.com/hmarr/codeowners v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/sebdah/goldie/v2 v2.8.0
 	github.com/sirupsen/logrus v1.10.2
@@ -18,7 +17,6 @@ require (
 	github.com/vrischmann/envconfig v1.4.1
 	go.szostok.io/version v1.2.0
 	golang.org/x/oauth2 v0.37.0
-	gopkg.in/pipe.v2 v2.0.0-20140414041502-3c2ca4d52544
 	gotest.tools v2.2.0+incompatible
 )
 
@@ -36,7 +34,6 @@ require (
 	github.com/google/go-github/v88 v88.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
 	github.com/hokaccha/go-prettyjson v0.0.0-20211117102719-0474bc63780f // indirect
 	github.com/huandu/xstrings v1.6.3 // indirect

@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/mlarraz/codeowners-validator/internal/ptr"
+	"github.com/mlarraz/codeowners-validator/internal/repo"
 	"github.com/mlarraz/codeowners-validator/pkg/codeowners"
 )
 
@@ -24,7 +25,7 @@ type (
 	}
 
 	Input struct {
-		RepoDir           string
+		Repo              *repo.Repo
 		CodeownersEntries []codeowners.Entry
 	}
 

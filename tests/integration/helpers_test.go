@@ -74,6 +74,30 @@ func SampleRepo(t *testing.T, org string, branch string) string {
 	return repoDir
 }
 
+// BloblessSparseClone creates a clone of the Git repository in origin that fetches no file
+// contents and checks out only the given paths, and returns the directory of the clone.
+func BloblessSparseClone(t *testing.T, origin string, paths ...string) string {
+	t.Helper()
+
+	git(t, origin, "config", "uploadpack.allowFilter", "true")
+
+	cloneDir := filepath.Join(t.TempDir(), "clone")
+	git(t, "", "clone", "--quiet", "--no-local", "--filter=blob:none", "--no-checkout", "file://"+filepath.ToSlash(origin), cloneDir)
+	git(t, cloneDir, append([]string{"sparse-checkout", "set", "--no-cone"}, paths...)...)
+	git(t, cloneDir, "checkout", "--quiet")
+
+	return cloneDir
+}
+
+func git(t *testing.T, dir string, args ...string) {
+	t.Helper()
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+}
+
 type Executor struct {
 	envs       map[string]string
 	timeout    time.Duration

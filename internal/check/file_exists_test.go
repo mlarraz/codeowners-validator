@@ -2,230 +2,258 @@ package check_test
 
 import (
 	"context"
-	"os"
+	"fmt"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/mlarraz/codeowners-validator/internal/check"
 	"github.com/mlarraz/codeowners-validator/internal/ptr"
+	"github.com/mlarraz/codeowners-validator/internal/repo"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestFileExists validates that file exists checker supports
-// syntax used by CODEOWNERS. As the CODEOWNERS file uses a pattern that
-// follows the same rules used in gitignore files, the test cases cover
-// patterns from this document: https://git-scm.com/docs/gitignore#_pattern_format
-func TestFileExists(t *testing.T) {
-	tests := map[string]struct {
-		codeownersInput string
-		expectedIssues  []check.Issue
-		paths           []string
+// docSampleFiles are the files used by the examples of CODEOWNERS patterns in GitHub's
+// documentation.
+// https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#example-of-a-codeowners-file
+var docSampleFiles = []string{
+	"app.js",
+	"src/app.js",
+	"build/logs/console.log",
+	"build/other/cache.log",
+	"docs/a.md",
+	"docs/nested/b.md",
+	"apps/web/index.html",
+	"apps/github/main.go",
+	"scripts/release.sh",
+	"logs/boot.log",
+	"services/api/logs/debug.log",
+	"a/b/file.txt",
+	"a/bc/file.txt",
+}
+
+func TestFileExistMatchesFilesWithGitHubSemantics(t *testing.T) {
+	repository := newTestRepo(t, docSampleFiles...)
+
+	tests := []struct {
+		name    string
+		pattern string
+		matched bool
 	}{
-		"Should found JS file": {
-			codeownersInput: `
-					*.js @pico
-			`,
-			paths: []string{
-				"/somewhere/over/the/rainbow/here/it/is.js",
-				"/somewhere/not/here/it/is.go",
-			},
-		},
-		"Should match directory 'foo' anywhere": {
-			codeownersInput: `
-					**/foo @pico
-			`,
-			paths: []string{
-				"/somewhere/over/the/foo/here/it/is.js",
-			},
-		},
-		"Should match file 'foo' anywhere": {
-			codeownersInput: `
-					**/foo.js @pico
-			`,
-			paths: []string{
-				"/somewhere/over/the/rainbow/here/it/foo.js",
-			},
-		},
-		"Should match directory 'bar' anywhere that is directly under directory 'foo'": {
-			codeownersInput: `
-					**/foo/bar @bello
-			`,
-			paths: []string{
-				"/somewhere/over/the/foo/bar/it/is.js",
-			},
-		},
-		"Should match file 'bar' anywhere that is directly under directory 'foo'": {
-			codeownersInput: `
-					**/foo/bar.js @bello
-			`,
-			paths: []string{
-				"/somewhere/over/the/foo/bar.js",
-			},
-		},
-		"Should match all files inside directory 'abc'": {
-			codeownersInput: `
-					abc/** @bello
-			`,
-			paths: []string{
-				"/abc/over/the/rainbow/bar.js",
-			},
-		},
-		"Should match 'a/b', 'a/x/b', 'a/x/y/b' and so on": {
-			codeownersInput: `
-					a/**/b @bello
-			`,
-			paths: []string{
-				"a/somewhere/over/the/b/foo.js",
-			},
-		},
-		// https://github.community/t/codeowners-file-with-a-not-file-type-condition/1423
-		"Should not match with negation pattern": {
-			codeownersInput: `
-					!/codeowners-validator @pico
-			`,
-			paths: []string{
-				"/somewhere/over/the/rainbow/here/it/is.js",
-			},
-			expectedIssues: []check.Issue{
-				newErrIssue(`"!/codeowners-validator" does not match any files in repository`),
-			},
-		},
-		"Should not found JS file": {
-			codeownersInput: `
-					*.js @pico
-			`,
-			expectedIssues: []check.Issue{
-				newErrIssue(`"*.js" does not match any files in repository`),
-			},
-		},
-		"Should not match directory 'foo' anywhere": {
-			codeownersInput: `
-					**/foo @pico
-			`,
-			expectedIssues: []check.Issue{
-				newErrIssue(`"**/foo" does not match any files in repository`),
-			},
-		},
-		"Should not match file 'foo' anywhere": {
-			codeownersInput: `
-					**/foo.js @pico
-			`,
-			expectedIssues: []check.Issue{
-				newErrIssue(`"**/foo.js" does not match any files in repository`),
-			},
-		},
-		"Should no match directory 'bar' anywhere that is directly under directory 'foo'": {
-			codeownersInput: `
-					**/foo/bar @bello
-			`,
-			expectedIssues: []check.Issue{
-				newErrIssue(`"**/foo/bar" does not match any files in repository`),
-			},
-		},
-		"Should not match file 'bar' anywhere that is directly under directory 'foo'": {
-			codeownersInput: `
-					**/foo/bar.js @bello
-			`,
-			expectedIssues: []check.Issue{
-				newErrIssue(`"**/foo/bar.js" does not match any files in repository`),
-			},
-		},
-		"Should not match all files inside directory 'abc'": {
-			codeownersInput: `
-					abc/** @bello
-			`,
-			expectedIssues: []check.Issue{
-				newErrIssue(`"abc/**" does not match any files in repository`),
-			},
-		},
-		"Should not match 'a/**/b'": {
-			codeownersInput: `
-					a/**/b @bello
-			`,
-			expectedIssues: []check.Issue{
-				newErrIssue(`"a/**/b" does not match any files in repository`),
-			},
-		},
+		{name: "wildcard matches files at any depth", pattern: "*.js", matched: true},
+		{name: "wildcard for suffix", pattern: "*.rs", matched: false},
+
+		{name: "anchored directory with trailing slash", pattern: "/build/logs/", matched: true},
+		{name: "anchored directory without trailing slash", pattern: "/build/logs", matched: true},
+		{name: "anchored directory glob", pattern: "/build/*/cache.log", matched: true},
+		{name: "directory glob doesn't match at depth", pattern: "docs/*/b.md", matched: true},
+		{name: "directory glob doesn't match nested file", pattern: "docs/*", matched: true},
+
+		{name: "single segment pattern matches at any depth", pattern: "apps/", matched: true},
+		{name: "single segment pattern with wildcard matches at any depth", pattern: "logs/", matched: true},
+		{name: "double star matches directory at any depth", pattern: "**/logs", matched: true},
+
+		{name: "anchored directory", pattern: "/apps/", matched: true},
+		{name: "anchored file", pattern: "/apps/github/main.go", matched: true},
+		{name: "anchored directory without trailing slash", pattern: "/apps/github", matched: true},
+		{name: "anchored directory without owners", pattern: "/scripts/", matched: true},
+
+		{name: "literal file", pattern: "/app.js", matched: true},
+		{name: "literal path doesn't match a path that it prefixes", pattern: "/app", matched: false},
+		{name: "literal directory", pattern: "/a/b", matched: true},
+		{name: "literal directory doesn't match a sibling that shares the prefix", pattern: "/a/b/", matched: true},
+		{name: "literal prefix isn't a path prefix", pattern: "/a/bc", matched: true},
+		{name: "literal file doesn't match a file that it prefixes", pattern: "/a/b/file", matched: false},
+		{name: "literal file", pattern: "/a/b/file.txt", matched: true},
+		{name: "unanchored multi-segment pattern is anchored at the root", pattern: "a/bc", matched: true},
+		{name: "unanchored multi-segment pattern doesn't match a nested path", pattern: "nested/b.md", matched: false},
+		{name: "unanchored multi-segment file pattern", pattern: "docs/nested/b.md", matched: true},
+
+		{name: "patterns are case-sensitive", pattern: "/Build/", matched: false},
+		{name: "root pattern matches nothing", pattern: "/", matched: false},
 	}
 
-	for tn, tc := range tests {
-		t.Run(tn, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			// given
-			tmp, err := os.MkdirTemp("", "file-checker")
-			require.NoError(t, err)
-			defer func() {
-				assert.NoError(t, os.RemoveAll(tmp))
-			}()
-
-			initFSStructure(t, tmp, tc.paths)
-
-			fchecker := check.NewFileExist()
-
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
-			defer cancel()
+			in := LoadInput(tc.pattern + " @sample-owner")
+			in.Repo = repository
 
 			// when
-			in := LoadInput(tc.codeownersInput)
-			in.RepoDir = tmp
-			out, err := fchecker.Check(ctx, in)
+			out, err := check.NewFileExist().Check(context.Background(), in)
 
 			// then
 			require.NoError(t, err)
-			assert.ElementsMatch(t, tc.expectedIssues, out.Issues)
+			if tc.matched {
+				assert.Empty(t, out.Issues)
+				return
+			}
+			require.Len(t, out.Issues, 1)
+			assert.Equal(t, issueAt(1, fmt.Sprintf("%q does not match any files in repository", tc.pattern)), out.Issues[0])
 		})
 	}
 }
 
-func TestFileExistCheckFileSystemFailure(t *testing.T) {
+func TestFileExistLiteralDirectoryBoundary(t *testing.T) {
+	tests := []struct {
+		name    string
+		files   []string
+		pattern string
+		matched bool
+	}{
+		{
+			name:    "literal directory doesn't match a sibling that shares its prefix",
+			files:   []string{"a/bc/file.txt"},
+			pattern: "/a/b",
+			matched: false,
+		},
+		{
+			name:    "literal directory with trailing slash doesn't match a sibling that shares its prefix",
+			files:   []string{"a/bc/file.txt"},
+			pattern: "/a/b/",
+			matched: false,
+		},
+		{
+			name:    "literal directory matches its files",
+			files:   []string{"a/b/file.txt"},
+			pattern: "/a/b",
+			matched: true,
+		},
+		{
+			name:    "literal directory doesn't match a path that it's a prefix of",
+			files:   []string{"a/b/file.txt"},
+			pattern: "/a/bc",
+			matched: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			repository := newTestRepo(t, tc.files...)
+			in := LoadInput(tc.pattern + " @sample-owner")
+			in.Repo = repository
+
+			// when
+			out, err := check.NewFileExist().Check(context.Background(), in)
+
+			// then
+			require.NoError(t, err)
+			if tc.matched {
+				assert.Empty(t, out.Issues)
+				return
+			}
+			assert.Equal(t, []check.Issue{issueAt(1, fmt.Sprintf("%q does not match any files in repository", tc.pattern))}, out.Issues)
+		})
+	}
+}
+
+func TestFileExistReportsEveryUnmatchedPattern(t *testing.T) {
 	// given
-	tmpdir, err := os.MkdirTemp("", "file-checker")
-	require.NoError(t, err)
-	defer func() {
-		assert.NoError(t, os.RemoveAll(tmpdir))
-	}()
-
-	err = os.MkdirAll(filepath.Join(tmpdir, "foo"), 0o222)
-	require.NoError(t, err)
-
-	in := LoadInput("* @pico")
-	in.RepoDir = tmpdir
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
-	defer cancel()
+	repository := newTestRepo(t, "app.js", "src/app.js")
+	codeowners := "*.js @js-owner\n/missing/ @missing-owner\n*.rs @rust-owner\n"
 
 	// when
-	out, err := check.NewFileExist().Check(ctx, in)
+	out, err := check.NewFileExist().Check(context.Background(), newInput(repository, codeowners))
+
+	// then
+	require.NoError(t, err)
+	assert.Equal(t, []check.Issue{
+		issueAt(2, `"/missing/" does not match any files in repository`),
+		issueAt(3, `"*.rs" does not match any files in repository`),
+	}, out.Issues)
+}
+
+func TestFileExistOnlyMatchesTrackedFiles(t *testing.T) {
+	// given
+	repository := newTestRepo(t, "app.js")
+	addUntrackedFile(t, repository, "notes.txt")
+	in := LoadInput("/notes.txt @sample-owner")
+	in.Repo = repository
+
+	// when
+	out, err := check.NewFileExist().Check(context.Background(), in)
+
+	// then
+	require.NoError(t, err)
+	assert.Equal(t, []check.Issue{issueAt(1, `"/notes.txt" does not match any files in repository`)}, out.Issues)
+}
+
+func TestFileExistReportsInvalidPatterns(t *testing.T) {
+	tests := []struct {
+		name        string
+		pattern     string
+		wantMessage string
+	}{
+		{
+			name:        "negation isn't supported",
+			pattern:     "!/docs/",
+			wantMessage: `"!/docs/" is not a valid CODEOWNERS pattern: unexpected character '!' at position 1`,
+		},
+		{
+			name:        "too many asterisks",
+			pattern:     "docs***",
+			wantMessage: `"docs***" is not a valid CODEOWNERS pattern: pattern cannot contain three consecutive asterisks`,
+		},
+	}
+
+	repository := newTestRepo(t, "docs/a.md")
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			in := LoadInput(tc.pattern + " @sample-owner")
+			in.Repo = repository
+
+			// when
+			out, err := check.NewFileExist().Check(context.Background(), in)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, []check.Issue{issueAt(1, tc.wantMessage)}, out.Issues)
+		})
+	}
+}
+
+func TestFileExistWorksOutsideGitRepository(t *testing.T) {
+	// given
+	dir := t.TempDir()
+	writeFile(t, dir, "docs/a.md")
+	repository := repo.New(dir, false)
+
+	// when
+	out, err := check.NewFileExist().Check(context.Background(), newInput(repository, "/docs/ @sample-owner\n/missing/ @missing-owner"))
+
+	// then
+	require.NoError(t, err)
+	assert.Equal(t, []check.Issue{issueAt(2, `"/missing/" does not match any files in repository`)}, out.Issues)
+}
+
+func TestFileExistReturnsErrorWhenFilesCannotBeListed(t *testing.T) {
+	// given: the repository path is a file, so it's not a Git repository and can't be walked
+	dir := t.TempDir()
+	writeFile(t, dir, "codeowners")
+	repository := repo.New(filepath.Join(dir, "codeowners"), false)
+
+	// when
+	out, err := check.NewFileExist().Check(context.Background(), newInput(repository, "* @sample-owner"))
 
 	// then
 	require.Error(t, err)
 	assert.Empty(t, out)
 }
 
-func newErrIssue(msg string) check.Issue {
+func newInput(repository *repo.Repo, codeowners string) check.Input {
+	in := LoadInput(codeowners)
+	in.Repo = repository
+	return in
+}
+
+func issueAt(line uint64, msg string) check.Issue {
 	return check.Issue{
 		Severity: check.Error,
-		LineNo:   ptr.Uint64Ptr(2),
+		LineNo:   ptr.Uint64Ptr(line),
 		Message:  msg,
-	}
-}
-func initFSStructure(t *testing.T, base string, paths []string) {
-	t.Helper()
-
-	for _, p := range paths {
-		if filepath.Ext(p) == "" {
-			err := os.MkdirAll(filepath.Join(base, p), 0o755)
-			require.NoError(t, err)
-		} else {
-			dir := filepath.Dir(p)
-
-			err := os.MkdirAll(filepath.Join(base, dir), 0o755)
-			require.NoError(t, err)
-
-			err = os.WriteFile(filepath.Join(base, p), []byte("hakuna-matata"), 0o600)
-			require.NoError(t, err)
-		}
 	}
 }
