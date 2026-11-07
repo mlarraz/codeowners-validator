@@ -90,9 +90,6 @@ jobs:
           # The repository path in which CODEOWNERS file should be validated."
           repository_path: "."
 
-          # Specifies whether Git should trust the repository path. The action's container runs as a different user than the one that owns the checkout.
-          trust_workspace: "true"
-
           # Defines the level on which the application should treat check issues as failures. Defaults to warning, which treats both errors and warnings as failures, and exits with error code 3. Possible values are error and warning. Default: warning"
           check_failure_level: "warning"
 
@@ -135,10 +132,12 @@ A sparse checkout of the CODEOWNERS file is therefore enough, however big the re
 
 On `pull_request` events, `actions/checkout` checks out the pull request's merge commit, which exists on GitHub, so `owners` validates the CODEOWNERS file as it would be after merging.
 
+## Runners
+
+The action installs the release binary for the runner's operating system and architecture: it downloads the archive from this repository's [releases](https://github.com/mlarraz/codeowners-validator/releases), verifies it against the release's `checksums.txt`, and runs it. It doesn't need Docker, so it runs on Linux runners, including `ubuntu-slim`, as well as macOS and Windows runners. The runner needs `bash`, `curl` or `wget`, and `tar` (`unzip` on Windows).
+
 <!--- example repository when failed -->
 
 ## Configuration
 
 For the GitHub Action, use the configuration described in the main README under the [Configuration](../README.md#configuration) section but **specify it as the [Action input parameters](https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idstepswith) instead of environment variables**. See the [Usage](#usage) section for the full syntax.
-
-If you want to use environment variables anyway, you must add the `INPUT_` prefix to each environment variable. For example, `OWNER_CHECKER_IGNORED_OWNERS` becomes `INPUT_OWNER_CHECKER_IGNORED_OWNERS`.
