@@ -54,7 +54,7 @@ jobs:
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - name: GitHub CODEOWNERS Validator
-        uses: mlarraz/codeowners-validator@v0.8.0
+        uses: mlarraz/codeowners-validator@v0.9.0
         # input parameters
         with:
           # ==== GitHub Auth ====

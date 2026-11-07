@@ -45,7 +45,7 @@ Here are the steps to create a GitHub App and use it for this tool:
 
       ```yaml
       - name: GitHub CODEOWNERS Validator
-        uses: mlarraz/codeowners-validator@v0.8.0
+        uses: mlarraz/codeowners-validator@v0.9.0
         with:
           # ...
           github_app_id: ${{ secrets.APP_ID }}

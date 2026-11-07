@@ -29,7 +29,7 @@ docker run --rm -v $(pwd):/repo -w /repo \
   -e GITHUB_ACCESS_TOKEN="$GH_TOKEN" \
   -e EXPERIMENTAL_CHECKS="notowned" \
   -e OWNER_CHECKER_REPOSITORY="org-name/rep-name" \
-  ghcr.io/mlarraz/codeowners-validator:v0.8.0
+  ghcr.io/mlarraz/codeowners-validator:v0.9.0
 ```
 
 #### Command line
@@ -52,7 +52,7 @@ env REPOSITORY_PATH="." \
     sparse-checkout: .github/CODEOWNERS
     sparse-checkout-cone-mode: false
     persist-credentials: false
-- uses: mlarraz/codeowners-validator@v0.8.0
+- uses: mlarraz/codeowners-validator@v0.9.0
   with:
     checks: "files,owners,duppatterns,syntax"
     experimental_checks: "notowned,avoid-shadowing"
@@ -74,13 +74,13 @@ It's highly recommended to install a fixed version of `codeowners-validator`. Re
 
 ```bash
 # binary installed into ./bin/
-curl -sfL https://raw.githubusercontent.com/mlarraz/codeowners-validator/main/install.sh | sh -s v0.8.0
+curl -sfL https://raw.githubusercontent.com/mlarraz/codeowners-validator/main/install.sh | sh -s v0.9.0
 
 # binary installed into $(go env GOPATH)/bin/codeowners-validator
-curl -sfL https://raw.githubusercontent.com/mlarraz/codeowners-validator/main/install.sh | sh -s -- -b $(go env GOPATH)/bin v0.8.0
+curl -sfL https://raw.githubusercontent.com/mlarraz/codeowners-validator/main/install.sh | sh -s -- -b $(go env GOPATH)/bin v0.9.0
 
 # In alpine linux (as it does not come with curl by default)
-wget -O - -q https://raw.githubusercontent.com/mlarraz/codeowners-validator/main/install.sh | sh -s v0.8.0
+wget -O - -q https://raw.githubusercontent.com/mlarraz/codeowners-validator/main/install.sh | sh -s v0.9.0
 
 # Print version. Add `-o short` to print just the version number.
 codeowners-validator version
@@ -90,7 +90,7 @@ You can also download [latest version](https://github.com/mlarraz/codeowners-val
 
 #### From Sources
 
-You can install `codeowners-validator` with `go install github.com/mlarraz/codeowners-validator@v0.8.0`.
+You can install `codeowners-validator` with `go install github.com/mlarraz/codeowners-validator@v0.9.0`.
 
 > NOTE: please use Go 1.27.3 or greater.
 

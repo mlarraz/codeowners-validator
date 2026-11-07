@@ -85,7 +85,7 @@ runs:
       shell: bash
       env:
         # The release that the action installs. The release process updates it, see docs/release.md.
-        VERSION: "v0.8.0"
+        VERSION: "v0.9.0"
       run: sh "$GITHUB_ACTION_PATH/install.sh" -b "$RUNNER_TEMP/codeowners-validator" "$VERSION"
 
     - name: Validate CODEOWNERS
