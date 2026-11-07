@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/mlarraz/codeowners-validator/internal/check"
-	"github.com/mlarraz/codeowners-validator/internal/printer"
 
 	"github.com/sirupsen/logrus"
 )
@@ -38,14 +37,14 @@ type CheckRunner struct {
 }
 
 // NewCheckRunner is a constructor for CheckRunner
-func NewCheckRunner(log logrus.FieldLogger, in check.Input, treatedAsFailure check.SeverityType, checks ...check.Checker) *CheckRunner {
+func NewCheckRunner(log logrus.FieldLogger, in check.Input, treatedAsFailure check.SeverityType, p Printer, checks ...check.Checker) *CheckRunner {
 	return &CheckRunner{
 		log:              log.WithField("service", "check:runner"),
 		input:            in,
 		treatedAsFailure: treatedAsFailure,
 		checks:           checks,
 
-		printer:        &printer.TTYPrinter{},
+		printer:        p,
 		allFoundIssues: map[check.SeverityType]uint32{},
 	}
 }
