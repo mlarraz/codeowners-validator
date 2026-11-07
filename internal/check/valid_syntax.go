@@ -6,7 +6,19 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/dustin/go-humanize"
+
 	"github.com/mlarraz/codeowners-validator/internal/ctxutil"
+)
+
+const (
+	// maxCodeownersSize is the size limit of the CODEOWNERS file. GitHub doesn't load a bigger
+	// file, so it doesn't request reviews from code owners, and its CODEOWNERS errors API doesn't
+	// report any errors. GitHub documents the limit as 3 MB; a file of exactly 3 MiB is still loaded.
+	maxCodeownersSize = 3 << 20
+	// codeownersSizeWarningPercent is the percentage of the limit from which the file is reported
+	// as close to the limit.
+	codeownersSizeWarningPercent = 80
 )
 
 var (
@@ -24,6 +36,7 @@ var (
 //
 // If any line in your CODEOWNERS file contains invalid syntax, the file will not be detected and will
 // not be used to request reviews. Invalid syntax includes inline comments and user or team names that do not exist on GitHub.
+// GitHub doesn't use a file over the size limit either.
 type ValidSyntax struct{}
 
 // NewValidSyntax returns new ValidSyntax instance.
@@ -34,6 +47,17 @@ func NewValidSyntax() *ValidSyntax {
 // Check for syntax issues in your CODEOWNERS file.
 func (v *ValidSyntax) Check(ctx context.Context, in Input) (Output, error) {
 	var bldr OutputBuilder
+
+	switch size := in.CodeownersSize; {
+	case size > maxCodeownersSize:
+		msg := fmt.Sprintf("The CODEOWNERS file is %s bytes, over GitHub's limit of %s bytes (3 MiB). GitHub ignores the file and doesn't request reviews from code owners.",
+			humanize.Comma(size), humanize.Comma(maxCodeownersSize))
+		bldr.ReportIssue(msg)
+	case size*100 >= maxCodeownersSize*codeownersSizeWarningPercent:
+		msg := fmt.Sprintf("The CODEOWNERS file is %s bytes, %d%% of GitHub's limit of %s bytes (3 MiB). GitHub ignores a file over the limit.",
+			humanize.Comma(size), size*100/maxCodeownersSize, humanize.Comma(maxCodeownersSize))
+		bldr.ReportIssue(msg, WithSeverity(Warning))
+	}
 
 	for _, entry := range in.CodeownersEntries {
 		if ctxutil.ShouldExit(ctx) {

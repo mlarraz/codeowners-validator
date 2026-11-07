@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/signal"
@@ -84,14 +85,22 @@ func NewRoot() *cobra.Command {
 			exitOnError(err)
 
 			// init codeowners entries
-			codeownersEntries, err := codeowners.NewFromPath(cfg.RepositoryPath)
+			codeownersPath, err := codeowners.FindFile(cfg.RepositoryPath)
+			exitOnError(err)
+			content, err := os.ReadFile(codeownersPath)
 			exitOnError(err)
 
 			// run check runner
 			absRepoPath, err := filepath.Abs(cfg.RepositoryPath)
 			exitOnError(err)
 
-			checkRunner := runner.NewCheckRunner(log, codeownersEntries, repo.New(absRepoPath, cfg.TrustWorkspace), cfg.CheckFailureLevel, checks...)
+			in := check.Input{
+				Repo:              repo.New(absRepoPath, cfg.TrustWorkspace),
+				CodeownersEntries: codeowners.ParseCodeowners(bytes.NewReader(content)),
+				CodeownersSize:    int64(len(content)),
+			}
+
+			checkRunner := runner.NewCheckRunner(log, in, cfg.CheckFailureLevel, checks...)
 			checkRunner.Run(cmd.Context())
 
 			if cmd.Context().Err() != nil {
