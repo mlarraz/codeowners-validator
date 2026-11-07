@@ -78,16 +78,38 @@ inputs:
     description: "Only check listed subdirectories for CODEOWNERS ownership that don't have owners."
     required: false
 
-  trust_workspace:
-    description: "Specifies whether Git should trust the repository path. The action's container runs as a different user than the one that owns the checkout, so Git refuses to read the repository without it. See: https://github.com/actions/checkout/issues/766"
-    required: false
-    default: "true"
-
 runs:
-  using: 'docker'
-  image: 'docker://ghcr.io/mlarraz/codeowners-validator:v0.8.0'
-  env:
-    ENVS_PREFIX: "INPUT"
+  using: "composite"
+  steps:
+    - name: Install codeowners-validator
+      shell: bash
+      env:
+        # The release that the action installs. The release process updates it, see docs/release.md.
+        VERSION: "v0.8.0"
+      run: sh "$GITHUB_ACTION_PATH/install.sh" -b "$RUNNER_TEMP/codeowners-validator" "$VERSION"
+
+    - name: Validate CODEOWNERS
+      shell: bash
+      env:
+        ENVS_PREFIX: "INPUT"
+        INPUT_GITHUB_ACCESS_TOKEN: ${{ inputs.github_access_token }}
+        INPUT_GITHUB_APP_ID: ${{ inputs.github_app_id }}
+        INPUT_GITHUB_APP_INSTALLATION_ID: ${{ inputs.github_app_installation_id }}
+        INPUT_GITHUB_APP_PRIVATE_KEY: ${{ inputs.github_app_private_key }}
+        INPUT_GITHUB_BASE_URL: ${{ inputs.github_base_url }}
+        INPUT_GITHUB_UPLOAD_URL: ${{ inputs.github_upload_url }}
+        INPUT_EXPERIMENTAL_CHECKS: ${{ inputs.experimental_checks }}
+        INPUT_CHECKS: ${{ inputs.checks }}
+        INPUT_REPOSITORY_PATH: ${{ inputs.repository_path }}
+        INPUT_CHECK_FAILURE_LEVEL: ${{ inputs.check_failure_level }}
+        INPUT_NOT_OWNED_CHECKER_SKIP_PATTERNS: ${{ inputs.not_owned_checker_skip_patterns }}
+        INPUT_OWNER_CHECKER_REPOSITORY: ${{ inputs.owner_checker_repository }}
+        INPUT_OWNER_CHECKER_REF: ${{ inputs.owner_checker_ref }}
+        INPUT_OWNER_CHECKER_IGNORED_OWNERS: ${{ inputs.owner_checker_ignored_owners }}
+        INPUT_OWNER_CHECKER_ALLOW_UNOWNED_PATTERNS: ${{ inputs.owner_checker_allow_unowned_patterns }}
+        INPUT_OWNER_CHECKER_OWNERS_MUST_BE_TEAMS: ${{ inputs.owner_checker_owners_must_be_teams }}
+        INPUT_NOT_OWNED_CHECKER_SUBDIRECTORIES: ${{ inputs.not_owned_checker_subdirectories }}
+      run: '"$RUNNER_TEMP/codeowners-validator/codeowners-validator"'
 
 branding:
   icon: "shield"

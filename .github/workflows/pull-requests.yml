@@ -86,3 +86,37 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
         run: make test-integration
+  action-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-slim, macos-latest, windows-latest ]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: Set git to use LF
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate a valid CODEOWNERS file
+        uses: ./
+        with:
+          checks: "syntax,duppatterns,files"
+          repository_path: tests/integration/testdata/repos/gh-codeowners/happy-path
+      - name: Validate an invalid CODEOWNERS file
+        id: invalid
+        continue-on-error: true
+        uses: ./
+        with:
+          checks: "syntax,duppatterns,files"
+          repository_path: tests/integration/testdata/repos/gh-codeowners/failures
+      - name: Expect the invalid CODEOWNERS file to fail
+        if: steps.invalid.outcome != 'failure'
+        run: |
+          echo "::error::The action passed on an invalid CODEOWNERS file"
+          exit 1
