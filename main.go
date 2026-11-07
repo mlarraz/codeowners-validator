@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 	"github.com/mlarraz/codeowners-validator/internal/check"
 	"github.com/mlarraz/codeowners-validator/internal/envconfig"
 	"github.com/mlarraz/codeowners-validator/internal/load"
+	"github.com/mlarraz/codeowners-validator/internal/printer"
 	"github.com/mlarraz/codeowners-validator/internal/repo"
 	"github.com/mlarraz/codeowners-validator/internal/runner"
 	"github.com/mlarraz/codeowners-validator/pkg/codeowners"
@@ -21,10 +24,12 @@ import (
 
 // Config holds the application configuration
 type Config struct {
-	RepositoryPath     string
-	CheckFailureLevel  check.SeverityType `envconfig:"default=warning"`
-	Checks             []string           `envconfig:"optional"`
-	ExperimentalChecks []string           `envconfig:"optional"`
+	RepositoryPath    string
+	CheckFailureLevel check.SeverityType `envconfig:"default=warning"`
+	Checks            []string           `envconfig:"optional"`
+	// ExperimentalChecks was removed when its checks became regular checks. It's still read so that
+	// setting it fails instead of silently not running the checks.
+	ExperimentalChecks []string `envconfig:"optional"`
 	// TrustWorkspace marks the repository as a safe directory for Git, which is needed when it's
 	// owned by another user, for example when it's mounted into a container.
 	TrustWorkspace bool `envconfig:"default=false"`
@@ -76,22 +81,35 @@ func NewRoot() *cobra.Command {
 			var cfg Config
 			err := envconfig.Init(&cfg)
 			exitOnError(err)
+			if len(cfg.ExperimentalChecks) > 0 {
+				exitOnError(errors.New("EXPERIMENTAL_CHECKS (the experimental_checks input of the GitHub Action) was removed: notowned and avoid-shadowing are regular checks now, list them in CHECKS (checks)"))
+			}
 
 			log := logrus.New()
 
 			// init checks
-			checks, err := load.Checks(cmd.Context(), cfg.Checks, cfg.ExperimentalChecks)
+			checks, err := load.Checks(cmd.Context(), cfg.Checks)
 			exitOnError(err)
 
 			// init codeowners entries
-			codeownersEntries, err := codeowners.NewFromPath(cfg.RepositoryPath)
+			codeownersPath, err := codeowners.FindFile(cfg.RepositoryPath)
+			exitOnError(err)
+			content, err := os.ReadFile(codeownersPath)
 			exitOnError(err)
 
 			// run check runner
 			absRepoPath, err := filepath.Abs(cfg.RepositoryPath)
 			exitOnError(err)
 
-			checkRunner := runner.NewCheckRunner(log, codeownersEntries, repo.New(absRepoPath, cfg.TrustWorkspace), cfg.CheckFailureLevel, checks...)
+			in := check.Input{
+				Repo:              repo.New(absRepoPath, cfg.TrustWorkspace),
+				CodeownersEntries: codeowners.ParseCodeowners(bytes.NewReader(content)),
+				CodeownersSize:    int64(len(content)),
+			}
+			p, err := newPrinter(codeownersPath)
+			exitOnError(err)
+
+			checkRunner := runner.NewCheckRunner(log, in, cfg.CheckFailureLevel, p, checks...)
 			checkRunner.Run(cmd.Context())
 
 			if cmd.Context().Err() != nil {
@@ -109,4 +127,18 @@ func NewRoot() *cobra.Command {
 	)
 
 	return rootCmd
+}
+
+// newPrinter returns the printer for the check results. In GitHub Actions, the results are also
+// reported as annotations on the CODEOWNERS file and added to the job summary.
+func newPrinter(codeownersPath string) (runner.Printer, error) {
+	if os.Getenv("GITHUB_ACTIONS") != "true" {
+		return &printer.TTYPrinter{}, nil
+	}
+
+	file, err := filepath.Abs(codeownersPath)
+	if err != nil {
+		return nil, err
+	}
+	return printer.NewGitHubActionsPrinter(file, os.Getenv("GITHUB_STEP_SUMMARY")), nil
 }

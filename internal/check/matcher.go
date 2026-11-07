@@ -32,12 +32,39 @@ type pathPattern struct {
 	match func(string) (bool, error)
 	// ranges are the ranges of files that the pattern can match. For literal patterns, they are
 	// exactly the files that the pattern matches; otherwise they're a superset that has to be
-	// tested with match.
+	// tested with matches.
 	ranges []fileRange
 	// literal reports whether every file in ranges is matched by the pattern.
 	literal bool
+	// prefixLen is the length of the literal text that every file in ranges starts with.
+	prefixLen int
+	// runs is the literal text that every matched file contains after the prefix, in order.
+	runs []string
 	// err explains why the pattern can't be matched, if it can't.
 	err error
+}
+
+// matches reports whether the pattern matches the file, which must be in one of its ranges.
+func (p *pathPattern) matches(file string) (bool, error) {
+	if p.literal {
+		return true, nil
+	}
+	if !containsInOrder(file[p.prefixLen:], p.runs) {
+		return false, nil
+	}
+	return p.match(file)
+}
+
+// containsInOrder reports whether s contains the runs in order, without overlapping.
+func containsInOrder(s string, runs []string) bool {
+	for _, r := range runs {
+		i := strings.Index(s, r)
+		if i < 0 {
+			return false
+		}
+		s = s[i+len(r):]
+	}
+	return true
 }
 
 // pathMatcher matches CODEOWNERS patterns against the files tracked in the repository.
@@ -45,8 +72,9 @@ type pathPattern struct {
 // GitHub matches CODEOWNERS patterns with the rules of gitignore; the patterns are compiled and
 // matched by github.com/hmarr/codeowners. Comparing every pattern with every file doesn't scale to
 // repositories with hundreds of thousands of files, so the sorted file list is indexed instead:
-// left-anchored literal patterns are resolved with binary search, and patterns with a wildcard are
-// only tested against the files below their literal leading directories.
+// literal patterns anchored at the root are resolved with binary search, and patterns with a
+// wildcard are only tested against the files that start with their literal prefix and contain the
+// rest of their literal text.
 type pathMatcher struct {
 	files []string
 	rules []pathPattern
@@ -103,11 +131,12 @@ func (m *pathMatcher) compile(entry codeowners.Entry) pathPattern {
 	}
 	p.match = rule.Match
 
-	if !strings.ContainsAny(entry.Pattern, "*?\\") && strings.HasPrefix(entry.Pattern, "/") {
-		// The library treats this pattern as a left-anchored literal: it matches the path itself
-		// and, unless the pattern has a trailing slash, the paths below it.
+	path := strings.TrimPrefix(entry.Pattern, "/")
+	if !strings.ContainsAny(entry.Pattern, "*?\\") && (path != entry.Pattern || strings.Contains(strings.TrimSuffix(path, "/"), "/")) {
+		// A literal pattern with a leading slash, or with a slash in the middle, is anchored at
+		// the root: it matches the path itself and, unless the pattern has a trailing slash, the
+		// paths below it.
 		p.literal = true
-		path := strings.TrimPrefix(entry.Pattern, "/")
 		if strings.HasSuffix(path, "/") {
 			p.ranges = m.prefixRanges(path)
 		} else {
@@ -117,35 +146,91 @@ func (m *pathMatcher) compile(entry codeowners.Entry) pathPattern {
 		return p
 	}
 
-	p.ranges = m.candidateRanges(entry.Pattern)
+	prefix, runs := literalText(entry.Pattern)
+	p.prefixLen, p.runs = len(prefix), runs
+	if prefix == "" {
+		p.ranges = []fileRange{{0, len(m.files)}}
+	} else {
+		p.ranges = m.prefixRanges(prefix)
+	}
 	return p
 }
 
-// candidateRanges returns the ranges of files that may be matched by the given valid pattern.
-func (m *pathMatcher) candidateRanges(pattern string) []fileRange {
-	// Patterns without a leading slash are anchored at the root as well, unless they consist of a
-	// single segment (optionally with a trailing slash), which matches at any depth.
-	path := strings.TrimPrefix(pattern, "/")
-	if !strings.HasPrefix(pattern, "/") && !strings.Contains(strings.TrimSuffix(path, "/"), "/") {
-		return []fileRange{{0, len(m.files)}}
+// literalText returns the literal text of a valid pattern: prefix is the text that every path
+// matched by the pattern starts with, and runs is the text that every matched path contains after
+// the prefix, in order. It follows the regular expression that github.com/hmarr/codeowners builds
+// for the pattern, which is made of literal text and wildcards.
+func literalText(pattern string) (prefix string, runs []string) {
+	segs := strings.Split(pattern, "/")
+	switch {
+	case segs[0] == "":
+		// A leading slash anchors the pattern at the root.
+		segs = segs[1:]
+	case len(segs) == 1 || (len(segs) == 2 && segs[1] == ""):
+		// A single segment matches at any depth, like a leading "**/".
+		if segs[0] != "**" {
+			segs = append([]string{"**"}, segs...)
+		}
+	}
+	if len(segs) > 1 && segs[len(segs)-1] == "" {
+		// A trailing slash is equivalent to "/**".
+		segs[len(segs)-1] = "**"
 	}
 
-	// Every path matched by a root-anchored pattern starts with the literal leading directories
-	// of the pattern, the ones that come before the first segment with a wildcard.
-	segments := strings.Split(path, "/")
-	segments = segments[:len(segments)-1]
-	var prefix strings.Builder
-	for _, segment := range segments {
-		if segment == "" || strings.ContainsAny(segment, "*?\\") {
-			break
+	var text strings.Builder
+	inPrefix := true
+	wildcard := func() {
+		if inPrefix {
+			prefix, inPrefix = text.String(), false
+		} else if text.Len() > 0 {
+			runs = append(runs, text.String())
 		}
-		prefix.WriteString(segment)
-		prefix.WriteByte('/')
+		text.Reset()
 	}
-	if prefix.Len() == 0 {
-		return []fileRange{{0, len(m.files)}}
+
+	needSlash := false
+	last := len(segs) - 1
+	for i, seg := range segs {
+		switch {
+		case seg == "**" && i == 0:
+			// Any leading directories, or none.
+			wildcard()
+			needSlash = false
+		case seg == "**" && i == last:
+			// A slash and anything below it.
+			text.WriteByte('/')
+			wildcard()
+		case seg == "**":
+			// A slash and any directories, or nothing, followed by a slash.
+			wildcard()
+			needSlash = true
+		default:
+			if needSlash {
+				text.WriteByte('/')
+			}
+			escape := false
+			for _, ch := range seg {
+				switch {
+				case escape:
+					escape = false
+					text.WriteRune(ch)
+				case ch == '\\':
+					escape = true
+				case ch == '*' || ch == '?':
+					wildcard()
+				default:
+					text.WriteRune(ch)
+				}
+			}
+			if i == last {
+				// The path itself or anything below it.
+				wildcard()
+			}
+			needSlash = true
+		}
 	}
-	return m.prefixRanges(prefix.String())
+	wildcard()
+	return prefix, runs
 }
 
 // prefixRanges returns the range of files that start with the given prefix.
@@ -177,7 +262,7 @@ func (m *pathMatcher) matchesAny(p *pathPattern) (bool, error) {
 
 	for _, r := range p.ranges {
 		for _, file := range m.files[r.lo:r.hi] {
-			match, err := p.match(file)
+			match, err := p.matches(file)
 			if err != nil {
 				return false, err
 			}
@@ -232,7 +317,7 @@ func (m *pathMatcher) notOwned(ctx context.Context, keep func(*pathPattern) bool
 				if owned[j] {
 					continue
 				}
-				match, err := p.match(m.files[j])
+				match, err := p.matches(m.files[j])
 				if err != nil {
 					return nil, err
 				}
@@ -254,4 +339,84 @@ func (m *pathMatcher) notOwned(ctx context.Context, keep func(*pathPattern) bool
 		}
 	}
 	return unownedFiles, nil
+}
+
+// shadowedRule is a rule that matches files, all of which are matched by later rules.
+type shadowedRule struct {
+	rule *pathPattern
+	// by are the indexes of the later rules that take precedence for the files, in ascending order.
+	by []int
+}
+
+// shadowed returns the valid rules that match at least one file but don't own any, because GitHub
+// uses the last rule that matches a file and later rules match every file that they match. The
+// rules are returned in the order of the CODEOWNERS file.
+func (m *pathMatcher) shadowed(ctx context.Context) ([]shadowedRule, error) {
+	// ownedBy is the index of the rule that owns each file, the last one that matches it, or -1.
+	// The rules are visited from the last one, so a file is owned by the first rule that matches it.
+	ownedBy := make([]int, len(m.files))
+	for j := range ownedBy {
+		ownedBy[j] = -1
+	}
+
+	var result []shadowedRule
+	for i := len(m.rules) - 1; i >= 0; i-- {
+		if ctxutil.ShouldExit(ctx) {
+			return nil, ctx.Err()
+		}
+		p := &m.rules[i]
+		if p.err != nil {
+			continue
+		}
+
+		owns := false
+		for _, r := range p.ranges {
+			for j := r.lo; j < r.hi; j++ {
+				if ownedBy[j] >= 0 {
+					continue
+				}
+				match, err := p.matches(m.files[j])
+				if err != nil {
+					return nil, err
+				}
+				if match {
+					ownedBy[j] = i
+					owns = true
+				}
+			}
+		}
+		if owns {
+			continue
+		}
+
+		// Every file that the rule matches, if any, is owned by a later rule.
+		by := map[int]struct{}{}
+		for _, r := range p.ranges {
+			for j := r.lo; j < r.hi; j++ {
+				match, err := p.matches(m.files[j])
+				if err != nil {
+					return nil, err
+				}
+				if match {
+					by[ownedBy[j]] = struct{}{}
+				}
+			}
+		}
+		if len(by) == 0 {
+			// The rule doesn't match any file, which the files check reports.
+			continue
+		}
+
+		s := shadowedRule{rule: p, by: make([]int, 0, len(by))}
+		for k := range by {
+			s.by = append(s.by, k)
+		}
+		sort.Ints(s.by)
+		result = append(result, s)
+	}
+
+	for l, r := 0, len(result)-1; l < r; l, r = l+1, r-1 {
+		result[l], result[r] = result[r], result[l]
+	}
+	return result, nil
 }

@@ -18,7 +18,7 @@ The [Codeowners Validator](https://github.com/mlarraz/codeowners-validator) is a
     Check OK
 ==> Executing File Exist Checker (5.030625ms)
     Check OK
-==> Executing [Experimental] Not Owned File Checker (118.596ms)
+==> Executing Not Owned File Checker (118.596ms)
     Check OK
 
 4 check(s) executed, no failure(s)
@@ -75,11 +75,8 @@ jobs:
 
           # ==== GitHub Auth ====
 
-          # "The list of checks that will be executed. By default, all checks are executed. Possible values: files,owners,duppatterns,syntax"
-          checks: "files,owners,duppatterns,syntax"
-
-          # "The comma-separated list of experimental checks that should be executed. By default, all experimental checks are turned off. Possible values: notowned,avoid-shadowing"
-          experimental_checks: "notowned,avoid-shadowing"
+          # The comma-separated list of checks to run. Defaults to syntax,duppatterns,files,owners. Possible values: syntax,duppatterns,files,owners,notowned,avoid-shadowing
+          checks: "syntax,duppatterns,files,owners,notowned,avoid-shadowing"
 
           # The GitHub base URL for API requests. Defaults to the public GitHub API, but can be set to a domain endpoint to use with GitHub Enterprise.
           github_base_url: "https://api.github.com/"
@@ -121,12 +118,16 @@ The best is to run this as a cron job and not only if you applying changes to CO
 >
 > The `owners` check uses the workflow's `GITHUB_TOKEN`, which needs the `contents: read` permission. See [GitHub authentication](./gh-auth.md) for tokens and GitHub Apps.
 
+## Annotations and job summary
+
+In GitHub Actions, where `GITHUB_ACTIONS` is `true`, the validator also reports every issue as an [annotation](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) on the CODEOWNERS file, so that pull requests show the issues on the lines they refer to, and adds a table of the results to the [job summary](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#adding-a-job-summary). GitHub limits the number of annotations it shows, and the job summary truncates very long outputs, such as thousands of not owned files; the job log always has every issue.
+
 ## Checkout
 
 No check reads the contents of any file but CODEOWNERS:
 
-- `syntax`, `duppatterns`, `avoid-shadowing`, and `owners` read the CODEOWNERS file. `owners` sends the commit to GitHub, which evaluates the CODEOWNERS file at that commit.
-- `files` and `notowned` read the list of tracked files from Git's index.
+- `syntax`, `duppatterns`, and `owners` read the CODEOWNERS file. `owners` sends the commit to GitHub, which evaluates the CODEOWNERS file at that commit.
+- `files`, `notowned`, and `avoid-shadowing` read the list of tracked files from Git's index.
 
 A sparse checkout of the CODEOWNERS file is therefore enough, however big the repository is. `actions/checkout` makes sparse checkouts blobless (`--filter=blob:none`), so it downloads the file tree of the commit but none of the other files. Turn off cone mode so that only the CODEOWNERS file is checked out.
 

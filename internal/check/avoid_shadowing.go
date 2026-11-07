@@ -3,53 +3,63 @@ package check
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/mlarraz/codeowners-validator/internal/ctxutil"
-	"github.com/mlarraz/codeowners-validator/pkg/codeowners"
+
 	"github.com/pkg/errors"
 )
 
+// maxListedShadowingLines is the number of later lines that an issue lists.
+const maxListedShadowingLines = 10
+
+// AvoidShadowing reports the CODEOWNERS lines that have no effect because later lines take
+// precedence for every file they match. GitHub uses the last line that matches a file.
 type AvoidShadowing struct{}
 
 func NewAvoidShadowing() *AvoidShadowing {
 	return &AvoidShadowing{}
 }
 
-func (c *AvoidShadowing) Check(ctx context.Context, in Input) (output Output, err error) {
-	var bldr OutputBuilder
+func (c *AvoidShadowing) Check(ctx context.Context, in Input) (Output, error) {
+	if ctxutil.ShouldExit(ctx) {
+		return Output{}, ctx.Err()
+	}
 
-	previousEntries := []codeowners.Entry{}
-	for _, entry := range in.CodeownersEntries {
-		if ctxutil.ShouldExit(ctx) {
-			return Output{}, ctx.Err()
-		}
-		re, err := wildCardToRegexp(endWithSlash(entry.Pattern))
-		if err != nil {
-			return Output{}, errors.Wrapf(err, "while compiling pattern %s into a regexp", entry.Pattern)
-		}
-		shadowed := []codeowners.Entry{}
-		for _, previous := range previousEntries {
-			if re.MatchString(endWithSlash(previous.Pattern)) {
-				shadowed = append(shadowed, previous)
-			}
-		}
-		if len(shadowed) > 0 {
-			msg := fmt.Sprintf("Pattern %q shadows the following patterns:\n%s\nEntries should go from least-specific to most-specific.", entry.Pattern, c.listFormatFunc(shadowed))
-			bldr.ReportIssue(msg, WithEntry(entry))
-		}
-		previousEntries = append(previousEntries, entry)
+	files, err := in.Repo.Files(ctx)
+	if err != nil {
+		return Output{}, errors.Wrap(err, "while listing the files of the repository")
+	}
+
+	matcher := newPathMatcher(files, in.CodeownersEntries)
+	shadowed, err := matcher.shadowed(ctx)
+	if err != nil {
+		return Output{}, errors.Wrap(err, "while looking for lines that don't own any files")
+	}
+
+	var bldr OutputBuilder
+	for _, s := range shadowed {
+		msg := fmt.Sprintf("Pattern %q has no effect: later lines take precedence for every file it matches:\n%s", s.rule.entry.Pattern, c.listFormatFunc(matcher, s.by))
+		bldr.ReportIssue(msg, WithEntry(s.rule.entry))
 	}
 
 	return bldr.Output(), nil
 }
 
-// listFormatFunc is a basic formatter that outputs a bullet point list of the pattern.
-func (c *AvoidShadowing) listFormatFunc(es []codeowners.Entry) string {
-	points := make([]string, len(es))
-	for i, err := range es {
-		points[i] = fmt.Sprintf("            * %d: %q", err.LineNo, err.Pattern)
+// listFormatFunc lists the given rules as a bullet point list.
+func (c *AvoidShadowing) listFormatFunc(m *pathMatcher, rules []int) string {
+	listed := rules
+	if len(listed) > maxListedShadowingLines {
+		listed = listed[:maxListedShadowingLines]
+	}
+
+	points := make([]string, 0, len(listed)+1)
+	for _, i := range listed {
+		entry := m.rules[i].entry
+		points = append(points, fmt.Sprintf("            * %d: %q", entry.LineNo, entry.Pattern))
+	}
+	if more := len(rules) - len(listed); more > 0 {
+		points = append(points, fmt.Sprintf("            * and %d more", more))
 	}
 
 	return strings.Join(points, "\n")
@@ -57,30 +67,5 @@ func (c *AvoidShadowing) listFormatFunc(es []codeowners.Entry) string {
 
 // Name returns human readable name of the validator
 func (AvoidShadowing) Name() string {
-	return "[Experimental] Avoid Shadowing Checker"
-}
-
-// endWithSlash adds a trailing slash to a string if it doesn't already end with one.
-// This is useful when matching CODEOWNERS pattern because the trailing slash is optional.
-func endWithSlash(s string) string {
-	if !strings.HasSuffix(s, "/") {
-		return s + "/"
-	}
-	return s
-}
-
-// wildCardToRegexp converts a wildcard pattern to a regular expression pattern.
-func wildCardToRegexp(pattern string) (*regexp.Regexp, error) {
-	var result strings.Builder
-	for i, literal := range strings.Split(pattern, "*") {
-		// Replace * with .*
-		if i > 0 {
-			result.WriteString(".*")
-		}
-
-		// Quote any regular expression meta characters in the
-		// literal text.
-		result.WriteString(regexp.QuoteMeta(literal))
-	}
-	return regexp.Compile("^" + result.String() + "$")
+	return "Avoid Shadowing Checker"
 }

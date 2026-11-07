@@ -6,9 +6,6 @@ import (
 	"time"
 
 	"github.com/mlarraz/codeowners-validator/internal/check"
-	"github.com/mlarraz/codeowners-validator/internal/printer"
-	"github.com/mlarraz/codeowners-validator/internal/repo"
-	"github.com/mlarraz/codeowners-validator/pkg/codeowners"
 
 	"github.com/sirupsen/logrus"
 )
@@ -31,8 +28,7 @@ type Printer interface {
 type CheckRunner struct {
 	m                  sync.RWMutex
 	log                logrus.FieldLogger
-	codeowners         []codeowners.Entry
-	repo               *repo.Repo
+	input              check.Input
 	treatedAsFailure   check.SeverityType
 	checks             []check.Checker
 	printer            Printer
@@ -41,15 +37,14 @@ type CheckRunner struct {
 }
 
 // NewCheckRunner is a constructor for CheckRunner
-func NewCheckRunner(log logrus.FieldLogger, co []codeowners.Entry, repository *repo.Repo, treatedAsFailure check.SeverityType, checks ...check.Checker) *CheckRunner {
+func NewCheckRunner(log logrus.FieldLogger, in check.Input, treatedAsFailure check.SeverityType, p Printer, checks ...check.Checker) *CheckRunner {
 	return &CheckRunner{
 		log:              log.WithField("service", "check:runner"),
-		repo:             repository,
+		input:            in,
 		treatedAsFailure: treatedAsFailure,
-		codeowners:       co,
 		checks:           checks,
 
-		printer:        &printer.TTYPrinter{},
+		printer:        p,
 		allFoundIssues: map[check.SeverityType]uint32{},
 	}
 }
@@ -64,10 +59,7 @@ func (r *CheckRunner) Run(ctx context.Context) {
 		go func(c check.Checker) {
 			defer wg.Done()
 			startTime := time.Now()
-			out, err := c.Check(ctx, check.Input{
-				CodeownersEntries: r.codeowners,
-				Repo:              r.repo,
-			})
+			out, err := c.Check(ctx, r.input)
 
 			r.collectMetrics(out, err)
 			r.printer.PrintCheckResult(c.Name(), time.Since(startTime), out, err)

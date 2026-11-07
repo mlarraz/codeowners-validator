@@ -108,5 +108,5 @@ func (c *NotOwnedFile) ListFormatFunc(es []string) string {
 
 // Name returns human-readable name of the validator
 func (NotOwnedFile) Name() string {
-	return "[Experimental] Not Owned File Checker"
+	return "Not Owned File Checker"
 }
