@@ -8,8 +8,11 @@ usage() {
   cat <<EOF
 $this: download go binaries for mlarraz/codeowners-validator
 
-Usage: $this [-b] bindir [-d] [tag]
+Usage: $this [-b bindir] [-a] [-d] [tag]
   -b sets bindir or installation directory, Defaults to ./bin
+  -a verifies the release attestation of the archive with the GitHub CLI (gh),
+     which needs a GitHub token, for example in GH_TOKEN. Only immutable
+     releases have an attestation.
   -d turns on debug logging
    [tag] is a tag from
    https://github.com/mlarraz/codeowners-validator/releases
@@ -27,9 +30,11 @@ parse_args() {
   # over-ridden by flag below
 
   BINDIR=${BINDIR:-./bin}
-  while getopts "b:dh?x" arg; do
+  ATTEST=false
+  while getopts "b:adh?x" arg; do
     case "$arg" in
       b) BINDIR="$OPTARG" ;;
+      a) ATTEST=true ;;
       d) log_set_priority 10 ;;
       h | \?) usage "$0" ;;
       x) set -x ;;
@@ -48,6 +53,9 @@ execute() {
   http_download "${tmpdir}/${TARBALL}" "${TARBALL_URL}"
   http_download "${tmpdir}/${CHECKSUM}" "${CHECKSUM_URL}"
   hash_sha256_verify "${tmpdir}/${TARBALL}" "${tmpdir}/${CHECKSUM}"
+  if [ "$ATTEST" = true ]; then
+    attestation_verify "${tmpdir}/${TARBALL}"
+  fi
   srcdir="${tmpdir}"
   (cd "${tmpdir}" && untar "${TARBALL}")
   test ! -d "${BINDIR}" && install -d "${BINDIR}"
@@ -77,15 +85,16 @@ get_binaries() {
   esac
 }
 tag_to_version() {
-  if [ -z "${TAG}" ]; then
-    log_info "checking GitHub for latest tag"
+  if [ -n "${TAG}" ] && [ "${TAG}" != "latest" ]; then
+    # The tag is used as is: if there's no such release, downloading it fails.
+    REALTAG=${TAG}
   else
-    log_info "checking GitHub for tag '${TAG}'"
-  fi
-  REALTAG=$(github_release "$OWNER/$REPO" "${TAG}") && true
-  if test -z "$REALTAG"; then
-    log_crit "unable to find '${TAG}' - use 'latest' or see https://github.com/${PREFIX}/releases for details"
-    exit 1
+    log_info "checking GitHub for latest tag"
+    REALTAG=$(github_release "$OWNER/$REPO" "") && true
+    if test -z "$REALTAG"; then
+      log_crit "unable to find the latest release - see https://github.com/${PREFIX}/releases for details"
+      exit 1
+    fi
   fi
   # if version starts with 'v', remove it
   TAG="$REALTAG"
@@ -261,11 +270,16 @@ http_download_curl() {
   else
     code=$(curl -w '%{http_code}' -sL -H "$header" -o "$local_file" "$source_url")
   fi
-  if [ "$code" != "200" ]; then
-    log_debug "http_download_curl received HTTP status $code"
-    return 1
-  fi
-  return 0
+  case "$code" in
+    200) return 0 ;;
+    408 | 429) ;;
+    4??)
+      log_debug "http_download_curl received HTTP status $code"
+      return 2
+      ;;
+  esac
+  log_debug "http_download_curl received HTTP status $code"
+  return 1
 }
 http_download_wget() {
   local_file=$1
@@ -277,8 +291,9 @@ http_download_wget() {
     wget -q --header "$header" -O "$local_file" "$source_url"
   fi
 }
-http_download() {
-  log_debug "http_download $2"
+# http_download_once returns 1 if the download failed and can be retried, and 2 if
+# it can't succeed, for example because the file doesn't exist.
+http_download_once() {
   if is_command curl; then
     http_download_curl "$@"
     return
@@ -287,7 +302,25 @@ http_download() {
     return
   fi
   log_crit "http_download unable to find wget or curl"
-  return 1
+  return 2
+}
+http_download() {
+  log_debug "http_download $2"
+  attempt=1
+  while :; do
+    status=0
+    http_download_once "$@" || status=$?
+    if [ "$status" -eq 0 ]; then
+      return 0
+    fi
+    if [ "$status" -eq 2 ] || [ "$attempt" -ge 4 ]; then
+      log_err "unable to download $2"
+      return 1
+    fi
+    log_info "unable to download $2, retrying in $((attempt * 2)) seconds"
+    sleep $((attempt * 2))
+    attempt=$((attempt + 1))
+  done
 }
 http_copy() {
   tmp=$(mktemp)
@@ -319,8 +352,8 @@ hash_sha256() {
     hash=$(shasum -a 256 "$TARGET" 2>/dev/null) || return 1
     echo "$hash" | cut -d ' ' -f 1
   elif is_command openssl; then
-    hash=$(openssl -dst openssl dgst -sha256 "$TARGET") || return 1
-    echo "$hash" | cut -d ' ' -f a
+    hash=$(openssl dgst -sha256 -r "$TARGET") || return 1
+    echo "$hash" | cut -d ' ' -f 1
   else
     log_crit "hash_sha256 unable to find command to compute sha-256 hash"
     return 1
@@ -342,6 +375,16 @@ hash_sha256_verify() {
   got=$(hash_sha256 "$TARGET")
   if [ "$want" != "$got" ]; then
     log_err "hash_sha256_verify checksum for '$TARGET' did not verify ${want} vs $got"
+    return 1
+  fi
+}
+attestation_verify() {
+  if ! is_command gh; then
+    log_crit "attestation_verify needs the GitHub CLI (gh) to verify the release attestation"
+    return 1
+  fi
+  if ! gh release verify-asset "${TAG}" "$1" --repo "${OWNER}/${REPO}"; then
+    log_crit "attestation_verify unable to verify the release attestation of '${1##*/}' for ${TAG}"
     return 1
   fi
 }
