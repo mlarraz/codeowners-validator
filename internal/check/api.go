@@ -27,6 +27,8 @@ type (
 	Input struct {
 		Repo              *repo.Repo
 		CodeownersEntries []codeowners.Entry
+		// CodeownersSize is the size of the CODEOWNERS file in bytes.
+		CodeownersSize int64
 	}
 
 	Output struct {

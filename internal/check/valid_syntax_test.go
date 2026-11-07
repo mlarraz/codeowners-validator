@@ -108,3 +108,49 @@ func TestValidSyntaxZeroValueEntry(t *testing.T) {
 	require.Len(t, out.Issues, len(expIssues))
 	assert.EqualValues(t, expIssues, out.Issues)
 }
+
+func TestValidSyntaxFileSize(t *testing.T) {
+	tests := map[string]struct {
+		size  int64
+		issue *check.Issue
+	}{
+		"Below the warning threshold": {
+			size: 2_516_582,
+		},
+		"At the warning threshold": {
+			size: 2_516_583,
+			issue: &check.Issue{
+				Severity: check.Warning,
+				Message:  "The CODEOWNERS file is 2,516,583 bytes, 80% of GitHub's limit of 3,145,728 bytes (3 MiB). GitHub ignores a file over the limit.",
+			},
+		},
+		"At the limit, which GitHub still loads": {
+			size: 3_145_728,
+			issue: &check.Issue{
+				Severity: check.Warning,
+				Message:  "The CODEOWNERS file is 3,145,728 bytes, 100% of GitHub's limit of 3,145,728 bytes (3 MiB). GitHub ignores a file over the limit.",
+			},
+		},
+		"Over the limit": {
+			size: 3_145_729,
+			issue: &check.Issue{
+				Severity: check.Error,
+				Message:  "The CODEOWNERS file is 3,145,729 bytes, over GitHub's limit of 3,145,728 bytes (3 MiB). GitHub ignores the file and doesn't request reviews from code owners.",
+			},
+		},
+	}
+	for tn, tc := range tests {
+		t.Run(tn, func(t *testing.T) {
+			// given
+			in := LoadInput("* @org/team")
+			in.CodeownersSize = tc.size
+
+			// when
+			out, err := check.NewValidSyntax().Check(context.Background(), in)
+
+			// then
+			require.NoError(t, err)
+			assertIssue(t, tc.issue, out.Issues)
+		})
+	}
+}

@@ -28,23 +28,30 @@ func (e Entry) String() string {
 
 // NewFromPath returns entries from codeowners
 func NewFromPath(repoPath string) ([]Entry, error) {
-	r, err := openCodeownersFile(repoPath)
+	file, err := FindFile(repoPath)
 	if err != nil {
 		return nil, err
 	}
 
-	return ParseCodeowners(r), nil
+	f, err := fs.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	return ParseCodeowners(f), nil
 }
 
-// openCodeownersFile finds a CODEOWNERS file and returns content.
+// FindFile returns the path of the CODEOWNERS file in the root, docs/, or .github/ directory of
+// the repository.
 // see: https://help.github.com/articles/about-code-owners/#codeowners-file-location
-func openCodeownersFile(dir string) (io.Reader, error) {
+func FindFile(repoPath string) (string, error) {
 	var detectedFiles []string
 	for _, p := range []string{".", "docs", ".github"} {
-		pth := path.Join(dir, p)
+		pth := path.Join(repoPath, p)
 		exists, err := afero.DirExists(fs, pth)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 
 		if !exists {
@@ -58,7 +65,7 @@ func openCodeownersFile(dir string) (io.Reader, error) {
 		case os.IsNotExist(err):
 			continue
 		default:
-			return nil, err
+			return "", err
 		}
 
 		detectedFiles = append(detectedFiles, f)
@@ -66,13 +73,13 @@ func openCodeownersFile(dir string) (io.Reader, error) {
 
 	switch l := len(detectedFiles); l {
 	case 0:
-		return nil, fmt.Errorf("no CODEOWNERS found in the root, docs/, or .github/ directory of the repository %s", dir)
+		return "", fmt.Errorf("no CODEOWNERS found in the root, docs/, or .github/ directory of the repository %s", repoPath)
 	case 1:
-		return fs.Open(detectedFiles[0])
+		return detectedFiles[0], nil
 	default:
-		return nil, fmt.Errorf("multiple CODEOWNERS files found in the %s locations of the repository %s",
-			english.OxfordWordSeries(replacePrefix(detectedFiles, dir, "./"), "and"),
-			dir)
+		return "", fmt.Errorf("multiple CODEOWNERS files found in the %s locations of the repository %s",
+			english.OxfordWordSeries(replacePrefix(detectedFiles, repoPath, "./"), "and"),
+			repoPath)
 	}
 }
 
