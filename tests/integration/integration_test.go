@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,6 +135,7 @@ func TestCheckSuccess(t *testing.T) {
 				envs: Envs{
 					"CHECKS":                   "owners",
 					"OWNER_CHECKER_REPOSITORY": "gh-codeowners/codeowners-samples",
+					"OWNER_CHECKER_REF":        "happy-path",
 					"GITHUB_ACCESS_TOKEN":      os.Getenv("GITHUB_TOKEN"),
 				},
 				repo: codeownersSamplesRepo,
@@ -143,6 +145,7 @@ func TestCheckSuccess(t *testing.T) {
 				envs: Envs{
 					"CHECKS":                   "owners",
 					"OWNER_CHECKER_REPOSITORY": "GitHubCODEOWNERS/codeowners-samples",
+					"OWNER_CHECKER_REF":        "happy-path",
 					"GITHUB_ACCESS_TOKEN":      os.Getenv("GITHUB_TOKEN"),
 				},
 				repo: caseInsensitiveOrgCodeownersSamplesRepo,
@@ -209,6 +212,7 @@ func TestCheckFailures(t *testing.T) {
 			envs: Envs{
 				"CHECKS":                               "owners",
 				"OWNER_CHECKER_REPOSITORY":             "gh-codeowners/codeowners-samples",
+				"OWNER_CHECKER_REF":                    "failures",
 				"OWNER_CHECKER_ALLOW_UNOWNED_PATTERNS": "false",
 				"GITHUB_ACCESS_TOKEN":                  os.Getenv("GITHUB_TOKEN"),
 			},
@@ -339,11 +343,25 @@ func TestCheckSparseBloblessClone(t *testing.T) {
 	}
 }
 
+// TestOwnerCheckAuthZAndAuthN verifies that the owners check works against public repositories
+// without credentials and reports rejected ones.
+//
 // To update golden file, run:
 //
-//	TEST=TestOwnerCheckAuthZAndAuthN TOKEN_WITH_NO_SCOPES=<token_with_no_scopes> UPDATE_GOLDEN=true make test-integration
+//	TEST=TestOwnerCheckAuthZAndAuthN UPDATE_GOLDEN=true make test-integration
 func TestOwnerCheckAuthZAndAuthN(t *testing.T) {
 	t.Parallel()
+
+	// The owners check asks GitHub about the CODEOWNERS file at OWNER_CHECKER_REF, so validating a
+	// directory that isn't a Git repository is enough and keeps the test independent of the local
+	// commit, which doesn't exist on GitHub.
+	codeownersDir := func(t *testing.T) string {
+		t.Helper()
+
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "CODEOWNERS"), []byte("* @ghost\n"), 0o600))
+		return dir
+	}
 
 	t.Run("token not specified", func(t *testing.T) {
 		t.Parallel()
@@ -351,20 +369,26 @@ func TestOwnerCheckAuthZAndAuthN(t *testing.T) {
 		// given
 		codeownersCmd := Exec().
 			Binary(os.Getenv(binaryPathEnvName)).
-			WithEnv("REPOSITORY_PATH", "not-needed").
+			WithEnv("REPOSITORY_PATH", codeownersDir(t)).
 			WithEnv("CHECKS", "owners").
-			WithEnv("OWNER_CHECKER_REPOSITORY", "gh-codeowners/codeowners-samples")
+			WithEnv("OWNER_CHECKER_REPOSITORY", "gh-codeowners/codeowners-samples").
+			WithEnv("OWNER_CHECKER_REF", "happy-path")
 
 		// when
-		result := codeownersCmd.AwaitResultAtMost(3 * time.Second)
+		result := codeownersCmd.AwaitResultAtMost(time.Minute)
+
+		// GitHub allows 60 unauthenticated requests per hour per IP address, and hosted runners
+		// share IP addresses, so the quota may already be used up.
+		if strings.Contains(result.Stdout, "GitHub rate limit reached") {
+			t.Skip("GitHub's unauthenticated rate limit for this IP address is exhausted")
+		}
 
 		// then
-		assert.Equal(t, 1, result.ExitCode)
+		assert.Equal(t, 0, result.ExitCode)
 
-		normalizedOutput := normalizeLogTime(result.Stderr)
+		normalizedOutput := normalizeTimeDurations(result.Stdout)
 		g := goldie.New(t, goldie.WithNameSuffix(".golden.txt"))
 		g.Assert(t, t.Name(), []byte(normalizedOutput))
-
 	})
 
 	t.Run("invalid token specified", func(t *testing.T) {
@@ -373,62 +397,19 @@ func TestOwnerCheckAuthZAndAuthN(t *testing.T) {
 		// given
 		codeownersCmd := Exec().
 			Binary(os.Getenv(binaryPathEnvName)).
-			WithEnv("REPOSITORY_PATH", "not-needed").
+			WithEnv("REPOSITORY_PATH", codeownersDir(t)).
 			WithEnv("CHECKS", "owners").
 			WithEnv("OWNER_CHECKER_REPOSITORY", "gh-codeowners/codeowners-samples").
+			WithEnv("OWNER_CHECKER_REF", "happy-path").
 			WithEnv("GITHUB_ACCESS_TOKEN", "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")
 
 		// when
-		result := codeownersCmd.AwaitResultAtMost(3 * time.Second)
+		result := codeownersCmd.AwaitResultAtMost(time.Minute)
 
 		// then
-		assert.Equal(t, 1, result.ExitCode)
+		assert.Equal(t, 3, result.ExitCode)
 
-		normalizedOutput := normalizeLogTime(result.Stderr)
-		g := goldie.New(t, goldie.WithNameSuffix(".golden.txt"))
-		g.Assert(t, t.Name(), []byte(normalizedOutput))
-	})
-
-	t.Run("token specified but without necessary scopes", func(t *testing.T) {
-		t.Parallel()
-
-		// given
-		codeownersCmd := Exec().
-			Binary(os.Getenv(binaryPathEnvName)).
-			WithEnv("REPOSITORY_PATH", "not-needed").
-			WithEnv("CHECKS", "owners").
-			WithEnv("OWNER_CHECKER_REPOSITORY", "gh-codeowners/codeowners-samples").
-			WithEnv("GITHUB_ACCESS_TOKEN", getEnvOrSkip(t, "TOKEN_WITH_NO_SCOPES"))
-
-		// when
-		result := codeownersCmd.AwaitResultAtMost(3 * time.Second)
-
-		// then
-		assert.Equal(t, 1, result.ExitCode)
-
-		normalizedOutput := normalizeLogTime(result.Stderr)
-		g := goldie.New(t, goldie.WithNameSuffix(".golden.txt"))
-		g.Assert(t, t.Name(), []byte(normalizedOutput))
-	})
-
-	t.Run("token specified but without necessary scopes and against private repo", func(t *testing.T) {
-		t.Parallel()
-
-		// given
-		codeownersCmd := Exec().
-			Binary(os.Getenv(binaryPathEnvName)).
-			WithEnv("REPOSITORY_PATH", "not-needed").
-			WithEnv("CHECKS", "owners").
-			WithEnv("OWNER_CHECKER_REPOSITORY", "gh-codeowners/private-repo").
-			WithEnv("GITHUB_ACCESS_TOKEN", getEnvOrSkip(t, "TOKEN_WITH_NO_SCOPES"))
-
-		// when
-		result := codeownersCmd.AwaitResultAtMost(3 * time.Second)
-
-		// then
-		assert.Equal(t, 1, result.ExitCode)
-
-		normalizedOutput := normalizeLogTime(result.Stderr)
+		normalizedOutput := normalizeTimeDurations(result.Stdout)
 		g := goldie.New(t, goldie.WithNameSuffix(".golden.txt"))
 		g.Assert(t, t.Name(), []byte(normalizedOutput))
 	})
@@ -448,6 +429,7 @@ func TestGitHubAppAuth(t *testing.T) {
 		WithEnv("REPOSITORY_PATH", repoDir).
 		WithEnv("CHECKS", "owners").
 		WithEnv("OWNER_CHECKER_REPOSITORY", "GitHubCODEOWNERS/codeowners-samples").
+		WithEnv("OWNER_CHECKER_REF", "happy-path").
 		WithEnv("GITHUB_APP_ID", gitHubAppId).
 		WithEnv("GITHUB_APP_INSTALLATION_ID", gitHubAppInstallationId).
 		WithEnv("GITHUB_APP_PRIVATE_KEY", privateKey)

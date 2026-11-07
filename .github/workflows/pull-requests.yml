@@ -83,7 +83,6 @@ jobs:
         run: echo "BINARY_EXT=.exe" >> "$GITHUB_ENV"
       - name: "Integration testing"
         env:
-          GITHUB_TOKEN: ${{ secrets.TOKEN_INTEGRATION_TESTS }}
-          TOKEN_WITH_NO_SCOPES: ${{ secrets.TOKEN_WITH_NO_SCOPES }}
+          GITHUB_TOKEN: ${{ github.token }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
         run: make test-integration

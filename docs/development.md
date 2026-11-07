@@ -73,7 +73,7 @@ make fix-lint-issues
 
 This project supports the integration tests that are defined in the [tests](../tests/integration) package. The offline checks run against the sample repositories in [testdata/repos](../tests/integration/testdata/repos), one directory per GitHub organization and one subdirectory per scenario.
 
-The `owners` check queries the teams of the `gh-codeowners` and `GitHubCODEOWNERS` organizations, which are visible only to their members. The tests for it read credentials from the `GITHUB_TOKEN`, `TOKEN_WITH_NO_SCOPES`, and `APP_PRIVATE_KEY` environment variables and are skipped when those aren't set.
+The `owners` check asks GitHub for the errors in the CODEOWNERS files of the public `gh-codeowners/codeowners-samples` and `GitHubCODEOWNERS/codeowners-samples` repositories, at their `happy-path` and `failures` branches. Any token works; the tests read it from the `GITHUB_TOKEN` environment variable and are skipped when it isn't set. The GitHub App test also needs the app's private key in `APP_PRIVATE_KEY`.
 
 ## Build a binary
 

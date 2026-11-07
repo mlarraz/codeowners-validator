@@ -33,9 +33,15 @@ Create a workflow (eg: `.github/workflows/sanity.yml` see [Creating a Workflow f
 name: "Codeowners Validator"
 
 on:
+  pull_request:
+    paths:
+      - ".github/CODEOWNERS"
   schedule:
     # Runs at 08:00 UTC every day
     - cron:  '0 8 * * *'
+
+permissions:
+  contents: read
 
 jobs:
   sanity:
@@ -53,19 +59,19 @@ jobs:
         with:
           # ==== GitHub Auth ====
 
-          ## ==== PAT ====
-          # GitHub access token is required only if the `owners` check is enabled
-          github_access_token: "${{ secrets.OWNERS_VALIDATOR_GITHUB_SECRET }}"
+          ## ==== Token ====
+          # The token the `owners` check uses to read CODEOWNERS errors from the GitHub API. Defaults to the workflow's token.
+          github_access_token: "${{ github.token }}"
 
           ## ==== App ====
-          # GitHub App ID for authentication. This replaces the github_access_token.
-          github_app_id: ${{ secrets.APP_ID }}
+          # GitHub App ID for authentication. When set, the app is used instead of github_access_token.
+          # github_app_id: ${{ secrets.APP_ID }}
 
           # GitHub App Installation ID. Required when github_app_id is set.
-          github_app_installation_id: ${{ secrets.APP_INSTALLATION_ID }}
+          # github_app_installation_id: ${{ secrets.APP_INSTALLATION_ID }}
 
           # GitHub App private key in PEM format. Required when github_app_id is set.
-          github_app_private_key: ${{ secrets.APP_PRIVATE_KEY }}
+          # github_app_private_key: ${{ secrets.APP_PRIVATE_KEY }}
 
           # ==== GitHub Auth ====
 
@@ -93,8 +99,11 @@ jobs:
           # The comma-separated list of patterns that should be ignored by not-owned-checker. For example, you can specify * and as a result, the * pattern from the CODEOWNERS file will be ignored and files owned by this pattern will be reported as unowned unless a later specific pattern will match that path. It's useful because often we have default owners entry at the begging of the CODOEWNERS file, e.g. * @global-owner1 @global-owner2"
           not_owned_checker_skip_patterns: ""
 
-          # The owner and repository name. For example, gh-codeowners/codeowners-samples. Used to check if GitHub team is in the given organization and has permission to the given repository."
+          # The owner and repository name whose CODEOWNERS file the `owners` check validates."
           owner_checker_repository: "${{ github.repository }}"
+
+          # The branch, tag, or commit SHA whose CODEOWNERS file the `owners` check validates. It must exist on GitHub. Defaults to the commit checked out in repository_path.
+          owner_checker_ref: ""
 
           # The comma-separated list of owners that should not be validated. Example: @owner1,@owner2,@org/team1,example@email.com."
           owner_checker_ignored_owners: "@ghost"
@@ -113,16 +122,18 @@ The best is to run this as a cron job and not only if you applying changes to CO
 
 > **Note**
 >
-> To execute `owners` check you need to create a [GitHub token](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/#creating-a-token) and store it as a secret in your repository, see ["Creating and storing encrypted secrets."](https://help.github.com/en/actions/configuring-and-managing-workflows/creating-and-storing-encrypted-secrets). Token requires only read-only scope for your repository.
+> The `owners` check uses the workflow's `GITHUB_TOKEN`, which needs the `contents: read` permission. See [GitHub authentication](./gh-auth.md) for tokens and GitHub Apps.
 
 ## Checkout
 
 No check reads the contents of any file but CODEOWNERS:
 
-- `syntax`, `duppatterns`, `avoid-shadowing`, and `owners` read the CODEOWNERS file.
+- `syntax`, `duppatterns`, `avoid-shadowing`, and `owners` read the CODEOWNERS file. `owners` sends the commit to GitHub, which evaluates the CODEOWNERS file at that commit.
 - `files` and `notowned` read the list of tracked files from Git's index.
 
 A sparse checkout of the CODEOWNERS file is therefore enough, however big the repository is. `actions/checkout` makes sparse checkouts blobless (`--filter=blob:none`), so it downloads the file tree of the commit but none of the other files. Turn off cone mode so that only the CODEOWNERS file is checked out.
+
+On `pull_request` events, `actions/checkout` checks out the pull request's merge commit, which exists on GitHub, so `owners` validates the CODEOWNERS file as it would be after merging.
 
 <!--- example repository when failed -->
 

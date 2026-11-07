@@ -47,6 +47,13 @@ func WithSeverity(s SeverityType) ReportIssueOpt {
 	}
 }
 
+// WithLineNo sets the line in the CODEOWNERS file that the issue refers to.
+func WithLineNo(line uint64) ReportIssueOpt {
+	return func(i *Issue) {
+		i.LineNo = ptr.Uint64Ptr(line)
+	}
+}
+
 func WithEntry(e codeowners.Entry) ReportIssueOpt {
 	return func(i *Issue) {
 		i.LineNo = ptr.Uint64Ptr(e.LineNo)
