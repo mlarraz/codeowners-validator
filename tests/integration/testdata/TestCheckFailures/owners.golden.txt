@@ -1,45 +1,45 @@
 ==> Executing Valid Owner Checker (<duration>)
-    [err] line 10: User "@owner-a" does not have github account
-    [err] line 11: User "@octocat" is not a member of the organization
-    [err] line 15: Team "avengers" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "bannermen" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "best-of-the-best" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "bosses" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "champions" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "crew" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "dominators" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "dream-team" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "elite" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "force" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "goal-diggers" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "heatwave" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "hot-shots" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "hustle" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "icons" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "justice-league" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "legends" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "lightning" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "masters" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "monarchy" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "naturals" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "ninjas" cannot review PRs on "codeowners-samples" as neither it nor any parent team has write permissions.
-    [err] line 15: Team "outliers" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "peak-performers" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "power" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "rebels" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "revolution" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "ringmasters" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "rule-breakers" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "shakedown" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "squad" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "titans" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "tribe" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "united" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "vikings" cannot review PRs on "codeowners-samples" as neither it nor any parent team has write permissions.
-    [err] line 15: Team "warriors" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 15: Team "wolf-pack" does not have permissions associated with the repository "codeowners-samples".
-    [err] line 17: Team "@gh-codeowners/not-existing-team" does not exist in organization "gh-codeowners".
-    [err] line 17: Team "@wrong-org/a-team" does not belong to "gh-codeowners" organization.
     [war] line 23: Missing owner, at least one owner is required
+    [err] line 10: Unknown owner: make sure @owner-a exists and has write access to the repository
+    [err] line 11: Unknown owner: make sure @octocat exists and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/masters exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/monarchy exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/naturals exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/ninjas exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/outliers exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/peak-performers exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/power exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/rebels exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/revolution exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/ringmasters exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/rule-breakers exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/shakedown exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/squad exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/titans exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/tribe exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/united exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/vikings exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/warriors exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/wolf-pack exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/avengers exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/bannermen exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/best-of-the-best exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/bosses exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/champions exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/crew exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/dominators exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/dream-team exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/elite exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/force exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/goal-diggers exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/heatwave exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/hot-shots exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/hustle exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/icons exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/justice-league exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/legends exists, is publicly visible, and has write access to the repository
+    [err] line 15: Unknown owner: make sure the team @gh-codeowners/lightning exists, is publicly visible, and has write access to the repository
+    [err] line 17: Unknown owner: make sure the team @wrong-org/a-team exists, is publicly visible, and has write access to the repository
+    [err] line 17: Unknown owner: make sure the team @gh-codeowners/not-existing-team exists, is publicly visible, and has write access to the repository
 
 1 check(s) executed, 1 failure(s)

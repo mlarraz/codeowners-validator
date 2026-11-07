@@ -4,11 +4,12 @@ author: "mlarraz@users.noreply.github.com"
 
 inputs:
   github_access_token:
-    description: "The GitHub access token. Instruction for creating a token can be found here: https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/#creating-a-token. If not provided then validating owners functionality could not work properly, e.g. you can reach the API calls quota or if you are setting GitHub Enterprise base URL then an unauthorized error can occur."
+    description: "The GitHub token the owners check uses to read CODEOWNERS errors from the GitHub API. It needs read access to the repository contents. Defaults to the workflow's token."
     required: false
+    default: "${{ github.token }}"
 
   github_app_id:
-    description: "Github App ID for authentication. This replaces the GITHUB_ACCESS_TOKEN. Instruction for creating a Github App can be found here: https://github.com/mlarraz/codeowners-validator/blob/main/docs/gh-auth.md"
+    description: "GitHub App ID for authentication. When set, the app is used instead of github_access_token. Instruction for creating a GitHub App can be found here: https://github.com/mlarraz/codeowners-validator/blob/main/docs/gh-auth.md"
     required: false
 
   github_app_installation_id:
@@ -51,9 +52,13 @@ inputs:
     required: false
 
   owner_checker_repository:
-    description: "The owner and repository name. For example, gh-codeowners/codeowners-samples. Used to check if GitHub team is in the given organization and has permission to the given repository."
+    description: "The owner and repository name whose CODEOWNERS file the owners check validates, for example octo-org/octo-repo."
     required: false
     default: "${{ github.repository }}"
+
+  owner_checker_ref:
+    description: "The branch, tag, or commit SHA whose CODEOWNERS file the owners check validates. It must exist on GitHub. Defaults to the commit checked out in repository_path."
+    required: false
 
   owner_checker_ignored_owners:
     description: "The comma-separated list of owners that should not be validated. Example: @owner1,@owner2,@org/team1,example@email.com."

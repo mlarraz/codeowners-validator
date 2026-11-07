@@ -4,26 +4,23 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/mail"
 	"strings"
-
-	"github.com/mlarraz/codeowners-validator/internal/ctxutil"
 
 	"github.com/google/go-github/v93/github"
 	"github.com/pkg/errors"
+
+	"github.com/mlarraz/codeowners-validator/internal/ctxutil"
+	"github.com/mlarraz/codeowners-validator/internal/repo"
 )
 
-const scopeHeader = "X-OAuth-Scopes"
-
-var reqScopes = map[github.Scope]struct{}{
-	github.ScopeReadOrg: {},
-}
-
 type ValidOwnerConfig struct {
-	// Repository represents the GitHub repository against which
-	// the external checks like teams and members validation should be executed.
+	// Repository represents the GitHub repository whose CODEOWNERS file is validated.
 	// It is in form 'owner/repository'.
 	Repository string
+	// Ref is a branch, tag or commit SHA that determines which version of the CODEOWNERS
+	// file is validated. Defaults to the commit checked out in the validated repository.
+	// If the validated directory isn't a Git repository, the repository's default branch is used.
+	Ref string `envconfig:"optional"`
 	// IgnoredOwners contains a list of owners that should not be validated.
 	// Defaults to @ghost.
 	// More info about the @ghost user: https://docs.github.com/en/free-pro-team@latest/github/setting-up-and-managing-your-github-user-account/deleting-your-user-account
@@ -36,62 +33,55 @@ type ValidOwnerConfig struct {
 	//
 	//  The `/infra/oncall-rotator/oncall-config.yml` this file is not owned by anyone.
 	AllowUnownedPatterns bool `envconfig:"default=true"`
-	// OwnersMustBeTeams specifies whether owners must be teams in the same org as the repository
+	// OwnersMustBeTeams specifies whether owners must be teams.
 	OwnersMustBeTeams bool `envconfig:"default=false"`
 }
 
-// ValidOwner validates each owner
+// ValidOwner validates the owners defined in the CODEOWNERS file.
+//
+// GitHub resolves CODEOWNERS owners when it requests reviews, so the check reports the errors
+// that GitHub itself finds in the CODEOWNERS file at the validated ref. This covers owners that
+// don't exist, have no access to the repository, are teams from another organization, and so on.
 type ValidOwner struct {
 	ghClient             *github.Client
-	checkScopes          bool
-	orgMembers           *map[string]struct{}
-	orgName              string
-	orgTeams             []*github.Team
-	orgRepoName          string
-	ignOwners            map[string]struct{}
+	owner                string
+	repo                 string
+	ref                  string
+	ignoredOwners        map[string]struct{}
 	allowUnownedPatterns bool
 	ownersMustBeTeams    bool
 }
 
 // NewValidOwner returns new instance of the ValidOwner
-func NewValidOwner(cfg ValidOwnerConfig, ghClient *github.Client, checkScopes bool) (*ValidOwner, error) {
+func NewValidOwner(cfg ValidOwnerConfig, ghClient *github.Client) (*ValidOwner, error) {
 	split := strings.Split(cfg.Repository, "/")
-	if len(split) != 2 {
+	if len(split) != 2 || split[0] == "" || split[1] == "" {
 		return nil, errors.Errorf("Wrong repository name. Expected pattern 'owner/repository', got '%s'", cfg.Repository)
 	}
 
-	ignOwners := map[string]struct{}{}
-	for _, n := range cfg.IgnoredOwners {
-		ignOwners[n] = struct{}{}
+	ignoredOwners := make(map[string]struct{}, len(cfg.IgnoredOwners))
+	for _, owner := range cfg.IgnoredOwners {
+		ignoredOwners[strings.ToLower(owner)] = struct{}{}
 	}
 
 	return &ValidOwner{
 		ghClient:             ghClient,
-		checkScopes:          checkScopes,
-		orgName:              split[0],
-		orgRepoName:          split[1],
-		ignOwners:            ignOwners,
+		owner:                split[0],
+		repo:                 split[1],
+		ref:                  cfg.Ref,
+		ignoredOwners:        ignoredOwners,
 		allowUnownedPatterns: cfg.AllowUnownedPatterns,
 		ownersMustBeTeams:    cfg.OwnersMustBeTeams,
 	}, nil
 }
 
-// Check if defined owners are the valid ones.
-// Allowed owner syntax:
-// @username
-// @org/team-name
-// user@example.com
-// source: https://help.github.com/articles/about-code-owners/#codeowners-syntax
-//
-// Checks:
-// - if owner is one of: GitHub user, org team, email address
-// - if GitHub user then check if have GitHub account
-// - if GitHub user then check if he/she is in organization
-// - if org team then check if exists in organization
+// Check reports the CODEOWNERS errors that GitHub identifies for the validated repository.
 func (v *ValidOwner) Check(ctx context.Context, in Input) (Output, error) {
-	var bldr OutputBuilder
+	if ctxutil.ShouldExit(ctx) {
+		return Output{}, ctx.Err()
+	}
 
-	checkedOwners := map[string]struct{}{}
+	var bldr OutputBuilder
 
 	for _, entry := range in.CodeownersEntries {
 		if len(entry.Owners) == 0 && !v.allowUnownedPatterns {
@@ -99,36 +89,129 @@ func (v *ValidOwner) Check(ctx context.Context, in Input) (Output, error) {
 			continue
 		}
 
-		for _, ownerName := range entry.Owners {
-			if ctxutil.ShouldExit(ctx) {
-				return Output{}, ctx.Err()
-			}
-
-			if v.isIgnoredOwner(ownerName) {
-				continue
-			}
-
-			if _, alreadyChecked := checkedOwners[ownerName]; alreadyChecked {
-				continue
-			}
-
-			validFn := v.selectValidateFn(ownerName)
-			if err := validFn(ctx, ownerName); err != nil {
-				bldr.ReportIssue(err.msg, WithEntry(entry))
-				if err.permanent { // Doesn't make sense to process further
-					return bldr.Output(), nil
+		if v.ownersMustBeTeams {
+			for _, owner := range entry.Owners {
+				if v.isIgnoredOwner(owner) {
+					continue
+				}
+				if !isGitHubTeam(owner) {
+					bldr.ReportIssue(fmt.Sprintf("Only team owners allowed and %q is not a team", owner), WithEntry(entry))
 				}
 			}
-			checkedOwners[ownerName] = struct{}{}
 		}
+	}
+
+	ref, err := v.resolveRef(ctx, in)
+	if err != nil {
+		return Output{}, err
+	}
+
+	errs, err := v.codeownersErrors(ctx, ref)
+	if err != nil {
+		return Output{}, err
+	}
+
+	for _, apiErr := range errs {
+		owner := ownerToken(apiErr)
+		if v.isIgnoredOwner(owner) {
+			continue
+		}
+
+		// GitHub numbers lines from 1; an error without a line is reported for the whole file.
+		var opts []ReportIssueOpt
+		if line := apiErr.GetLine(); line > 0 {
+			opts = append(opts, WithLineNo(uint64(line)))
+		}
+		bldr.ReportIssue(codeownersErrorMessage(apiErr, owner), opts...)
 	}
 
 	return bldr.Output(), nil
 }
 
-func isEmailAddress(s string) bool {
-	_, err := mail.ParseAddress(s)
-	return err == nil
+// resolveRef returns the ref for which the CODEOWNERS file is validated. An empty ref means
+// GitHub's default branch for the repository.
+func (v *ValidOwner) resolveRef(ctx context.Context, in Input) (string, error) {
+	if v.ref != "" {
+		return v.ref, nil
+	}
+	if in.Repo == nil {
+		return "", nil
+	}
+
+	head, err := in.Repo.Head(ctx)
+	switch {
+	case err == nil:
+		return head, nil
+	case errors.Is(err, repo.ErrNotRepository):
+		return "", nil
+	default:
+		return "", errors.Wrapf(err, "while reading the checked-out commit of %s; set OWNER_CHECKER_REF to a branch, tag or commit", in.Repo.Dir())
+	}
+}
+
+func (v *ValidOwner) codeownersErrors(ctx context.Context, ref string) ([]*github.CodeownersError, error) {
+	result, _, err := v.ghClient.Repositories.GetCodeownersErrors(ctx, v.owner, v.repo, &github.GetCodeownersErrorsOptions{Ref: ref})
+	if err != nil {
+		return nil, v.apiError(err, ref)
+	}
+	return result.GetErrors(), nil
+}
+
+func (v *ValidOwner) apiError(err error, ref string) error {
+	where := v.owner + "/" + v.repo
+	if ref != "" {
+		where += " at ref " + fmt.Sprintf("%q", ref)
+	}
+
+	var errResp *github.ErrorResponse
+	var rateLimitErr *github.RateLimitError
+	var abuseRateLimitErr *github.AbuseRateLimitError
+	switch {
+	case errors.As(err, &rateLimitErr):
+		return fmt.Errorf("GitHub rate limit reached while listing CODEOWNERS errors for %s: %s", where, rateLimitErr.Message)
+	case errors.As(err, &abuseRateLimitErr):
+		return fmt.Errorf("GitHub rate limit reached while listing CODEOWNERS errors for %s: %s", where, abuseRateLimitErr.Message)
+	case errors.As(err, &errResp):
+		switch errResp.Response.StatusCode {
+		case http.StatusNotFound:
+			return fmt.Errorf("repository %s, its ref or CODEOWNERS file was not found. Check OWNER_CHECKER_REPOSITORY and OWNER_CHECKER_REF, and make sure the credentials can read the repository: fine-grained tokens and GitHub App installation tokens need the Contents read permission, classic tokens need the repo scope for private repositories", where)
+		case http.StatusUnauthorized:
+			return fmt.Errorf("GitHub rejected the credentials while listing CODEOWNERS errors for %s: 401 Bad credentials. Check GITHUB_ACCESS_TOKEN", where)
+		case http.StatusInternalServerError:
+			return fmt.Errorf("GitHub returned 500 while listing CODEOWNERS errors for %s. The ref must exist on GitHub: push it or set OWNER_CHECKER_REF to a branch, tag or commit that does", where)
+		default:
+			return fmt.Errorf("GitHub returned %s while listing CODEOWNERS errors for %s: %s", errResp.Response.Status, where, strings.TrimSpace(errResp.Message))
+		}
+	default:
+		return fmt.Errorf("while listing CODEOWNERS errors for %s: %w", where, err)
+	}
+}
+
+// ownerToken returns the owner that the error points at, based on the error's column in the
+// erroneous CODEOWNERS line.
+func ownerToken(apiErr *github.CodeownersError) string {
+	source := apiErr.GetSource()
+	start := apiErr.GetColumn() - 1
+	if start < 0 || start >= len(source) {
+		return ""
+	}
+
+	tokens := strings.Fields(source[start:])
+	if len(tokens) == 0 {
+		return ""
+	}
+	return tokens[0]
+}
+
+func codeownersErrorMessage(apiErr *github.CodeownersError, owner string) string {
+	kind := apiErr.GetKind()
+	if suggestion := apiErr.GetSuggestion(); suggestion != "" {
+		return fmt.Sprintf("%s: %s", kind, suggestion)
+	}
+	if owner == "" {
+		return kind
+	}
+	return fmt.Sprintf("%s: %s", kind, owner)
 }
 
 func isGitHubTeam(s string) bool {
@@ -138,251 +221,12 @@ func isGitHubTeam(s string) bool {
 	return hasPrefix && containsSlash && len(split) == 2 && split[1] != ""
 }
 
-func isGitHubUser(s string) bool {
-	return !strings.Contains(s, "/") && strings.HasPrefix(s, "@")
-}
-
 func (v *ValidOwner) isIgnoredOwner(name string) bool {
-	_, found := v.ignOwners[name]
+	_, found := v.ignoredOwners[strings.ToLower(name)]
 	return found
-}
-
-func (v *ValidOwner) selectValidateFn(name string) func(context.Context, string) *validateError {
-	switch {
-	case v.ownersMustBeTeams:
-		return func(ctx context.Context, s string) *validateError {
-			if !isGitHubTeam(name) {
-				return newValidateError("Only team owners allowed and %q is not a team", name)
-			}
-			return v.validateTeam(ctx, s)
-		}
-	case isGitHubTeam(name):
-		return v.validateTeam
-	case isGitHubUser(name):
-		return v.validateGitHubUser
-	case isEmailAddress(name):
-		// TODO: try to check if e-mail really exists
-		return func(context.Context, string) *validateError { return nil }
-	default:
-		return func(_ context.Context, name string) *validateError {
-			return newValidateError("Not valid owner definition %q", name)
-		}
-	}
-}
-
-func (v *ValidOwner) initOrgListTeams(ctx context.Context) *validateError {
-	var teams []*github.Team
-	req := &github.ListOptions{
-		PerPage: 100,
-	}
-	for {
-		resultPage, resp, err := v.ghClient.Teams.ListTeams(ctx, v.orgName, req)
-		if err != nil { // TODO: implement retry?
-			switch err := err.(type) {
-			case *github.ErrorResponse:
-				if err.Response.StatusCode == http.StatusUnauthorized {
-					return newValidateError("Teams for organization %q could not be queried. Requires GitHub authorization.", v.orgName)
-				}
-				return newValidateError("HTTP error occurred while calling GitHub: %v", err)
-			case *github.RateLimitError:
-				return newValidateError("GitHub rate limit reached: %v", err.Message)
-			default:
-				return newValidateError("Unknown error occurred while calling GitHub: %v", err)
-			}
-		}
-		teams = append(teams, resultPage...)
-		if resp.NextPage == 0 {
-			break
-		}
-		req.Page = resp.NextPage
-	}
-
-	v.orgTeams = teams
-
-	return nil
-}
-
-func (v *ValidOwner) validateTeam(ctx context.Context, name string) *validateError {
-	if v.orgTeams == nil {
-		if err := v.initOrgListTeams(ctx); err != nil {
-			return err.AsPermanent()
-		}
-	}
-
-	// called after validation it's safe to work on `parts` slice
-	parts := strings.SplitN(name, "/", 2)
-	org := parts[0]
-	org = strings.TrimPrefix(org, "@")
-	team := parts[1]
-
-	// GitHub normalizes name before comparison
-	if !strings.EqualFold(org, v.orgName) {
-		return newValidateError("Team %q does not belong to %q organization.", name, v.orgName)
-	}
-
-	teamExists := func() bool {
-		for _, v := range v.orgTeams {
-			// GitHub normalizes name before comparison
-			if strings.EqualFold(v.GetSlug(), team) {
-				return true
-			}
-		}
-		return false
-	}
-
-	if !teamExists() {
-		return newValidateError("Team %q does not exist in organization %q.", name, org)
-	}
-
-	// repo contains the permissions for the team slug given
-	// TODO: switch to the GraphQL API, which resolves team repository
-	// permissions in a single request instead of the REST round trips below.
-	repo, _, err := v.ghClient.Teams.IsTeamRepoBySlug(ctx, v.orgName, team, org, v.orgRepoName)
-	if err != nil { // TODO: implement retry?
-		switch err := err.(type) {
-		case *github.ErrorResponse:
-			switch err.Response.StatusCode {
-			case http.StatusUnauthorized:
-				return newValidateError(
-					"Team permissions information for %q/%q could not be queried. Requires GitHub authorization.",
-					org, v.orgRepoName)
-			case http.StatusNotFound:
-				return newValidateError(
-					"Team %q does not have permissions associated with the repository %q.",
-					team, v.orgRepoName)
-			default:
-				return newValidateError("HTTP error occurred while calling GitHub: %v", err)
-			}
-		case *github.RateLimitError:
-			return newValidateError("GitHub rate limit reached: %v", err.Message)
-		default:
-			return newValidateError("Unknown error occurred while calling GitHub: %v", err)
-		}
-	}
-
-	permissions := repo.GetPermissions()
-	if !permissions.GetAdmin() && !permissions.GetMaintain() && !permissions.GetPush() {
-		return newValidateError(
-			"Team %q cannot review PRs on %q as neither it nor any parent team has write permissions.",
-			team, v.orgRepoName)
-	}
-
-	return nil
-}
-
-func (v *ValidOwner) validateGitHubUser(ctx context.Context, name string) *validateError {
-	if v.orgMembers == nil { // TODO: lazy init, make it more robust.
-		if err := v.initOrgListMembers(ctx); err != nil {
-			return newValidateError("Cannot initialize organization member list: %v", err).AsPermanent()
-		}
-	}
-
-	userName := strings.TrimPrefix(name, "@")
-	_, _, err := v.ghClient.Users.Get(ctx, userName)
-	if err != nil { // TODO: implement retry?
-		switch err := err.(type) {
-		case *github.ErrorResponse:
-			if err.Response.StatusCode == http.StatusNotFound {
-				return newValidateError("User %q does not have github account", name)
-			}
-			return newValidateError("HTTP error occurred while calling GitHub: %v", err).AsPermanent()
-		case *github.RateLimitError:
-			return newValidateError("GitHub rate limit reached: %v", err.Message).AsPermanent()
-		default:
-			return newValidateError("Unknown error occurred while calling GitHub: %v", err).AsPermanent()
-		}
-	}
-
-	_, isMember := (*v.orgMembers)[userName]
-	if !isMember {
-		return newValidateError("User %q is not a member of the organization", name)
-	}
-
-	return nil
-}
-
-// There is a method to check if user is a org member
-//
-//	client.Organizations.IsMember(context.Background(), "org-name", "user-name")
-//
-// But latency is too huge for checking each single user independent
-// better and faster is to ask for all members and cache them.
-func (v *ValidOwner) initOrgListMembers(ctx context.Context) error {
-	opt := &github.ListMembersOptions{
-		ListOptions: github.ListOptions{PerPage: 100},
-	}
-
-	var allMembers []*github.User
-	for {
-		users, resp, err := v.ghClient.Organizations.ListMembers(ctx, v.orgName, opt)
-		if err != nil {
-			return err
-		}
-		allMembers = append(allMembers, users...)
-		if resp.NextPage == 0 {
-			break
-		}
-		opt.Page = resp.NextPage
-	}
-
-	v.orgMembers = &map[string]struct{}{}
-	for _, u := range allMembers {
-		(*v.orgMembers)[u.GetLogin()] = struct{}{}
-	}
-
-	return nil
 }
 
 // Name returns human-readable name of the validator
 func (ValidOwner) Name() string {
 	return "Valid Owner Checker"
-}
-
-// CheckSatisfied checks if this check has all requirements satisfied to be successfully executed.
-func (v *ValidOwner) CheckSatisfied(ctx context.Context) error {
-	_, resp, err := v.ghClient.Repositories.Get(ctx, v.orgName, v.orgRepoName)
-	if err != nil {
-		switch err := err.(type) {
-		case *github.ErrorResponse:
-			if err.Response.StatusCode == http.StatusNotFound {
-				return fmt.Errorf("repository %s/%s not found, or it's private and token doesn't have enough permission", v.orgName, v.orgRepoName)
-			}
-			return fmt.Errorf("HTTP error occurred while calling GitHub: %v", err)
-		case *github.RateLimitError:
-			return fmt.Errorf("GitHub rate limit reached: %v", err.Message)
-		default:
-			return fmt.Errorf("unknown error occurred while calling GitHub: %v", err)
-		}
-	}
-
-	if !v.checkScopes {
-		// If the GitHub client uses a GitHub App, the headers won't have scope information.
-		// TODO: Call the https://api.github.com/app/installations and check if the `permission` field has `"members": "read"
-		return nil
-	}
-
-	return v.checkRequiredScopes(resp.Header)
-}
-
-func (*ValidOwner) checkRequiredScopes(header http.Header) error {
-	gotScopes := strings.Split(header.Get(scopeHeader), ",")
-	presentScope := map[github.Scope]struct{}{}
-	for _, scope := range gotScopes {
-		scope = strings.TrimSpace(scope)
-		presentScope[github.Scope(scope)] = struct{}{}
-	}
-
-	var missing []string
-	for reqScope := range reqScopes {
-		if _, found := presentScope[reqScope]; found {
-			continue
-		}
-		missing = append(missing, string(reqScope))
-	}
-
-	if len(missing) > 0 {
-		return fmt.Errorf("missing scopes: %q", strings.Join(missing, ", "))
-	}
-
-	return nil
 }

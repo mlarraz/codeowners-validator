@@ -27,15 +27,10 @@ type ClientConfig struct {
 }
 
 // Validate validates if provided client options are valid.
+//
+// Credentials are optional, so that public repositories can be validated without
+// authentication. When both a token and a GitHub App are configured, the App is used.
 func (c *ClientConfig) Validate() error {
-	if c.AccessToken == "" && c.AppID == 0 {
-		return errors.New("GitHub authorization is required, provide ACCESS_TOKEN or APP_ID")
-	}
-
-	if c.AccessToken != "" && c.AppID != 0 {
-		return errors.New("GitHub ACCESS_TOKEN cannot be provided when APP_ID is specified")
-	}
-
 	if c.AppID != 0 {
 		if c.AppInstallationID == 0 {
 			return errors.New("GitHub APP_INSTALLATION_ID is required with APP_ID")
@@ -48,23 +43,23 @@ func (c *ClientConfig) Validate() error {
 	return nil
 }
 
-func NewClient(ctx context.Context, cfg *ClientConfig) (ghClient *github.Client, isApp bool, err error) {
+func NewClient(ctx context.Context, cfg *ClientConfig) (*github.Client, error) {
 	if err := cfg.Validate(); err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	httpClient := http.DefaultClient
+	var err error
 
-	if cfg.AccessToken != "" {
+	if cfg.AppID != 0 {
+		httpClient, err = createAppInstallationHTTPClient(cfg)
+		if err != nil {
+			return nil, err
+		}
+	} else if cfg.AccessToken != "" {
 		httpClient = oauth2.NewClient(ctx, oauth2.StaticTokenSource(
 			&oauth2.Token{AccessToken: cfg.AccessToken},
 		))
-	} else if cfg.AppID != 0 {
-		httpClient, err = createAppInstallationHTTPClient(cfg)
-		isApp = true
-		if err != nil {
-			return
-		}
 	}
 
 	opts := []github.ClientOptionsFunc{
@@ -79,8 +74,11 @@ func NewClient(ctx context.Context, cfg *ClientConfig) (ghClient *github.Client,
 		opts = append(opts, github.WithEnterpriseURLs(url.CanonicalPath(baseURL), url.CanonicalPath(uploadURL)))
 	}
 
-	ghClient, err = github.NewClient(opts...)
-	return
+	ghClient, err := github.NewClient(opts...)
+	if err != nil {
+		return nil, err
+	}
+	return ghClient, nil
 }
 
 func createAppInstallationHTTPClient(cfg *ClientConfig) (client *http.Client, err error) {

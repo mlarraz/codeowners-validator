@@ -1,1 +1,4 @@
-time="<time>" level=fatal msg="while creating GitHub client: GitHub authorization is required, provide ACCESS_TOKEN or APP_ID"
+==> Executing Valid Owner Checker (<duration>)
+    Check OK
+
+1 check(s) executed, no failure(s)

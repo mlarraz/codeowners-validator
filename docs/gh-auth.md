@@ -1,32 +1,20 @@
 [← back to docs](./README.md)
 
-# GitHub tokens
+# GitHub authentication
 
-The [valid_owner.go](./../internal/check/valid_owner.go) check requires the GitHub token for the following reasons:
+The `owners` check asks the GitHub API which errors GitHub finds in the CODEOWNERS file ([`GET /repos/{owner}/{repo}/codeowners/errors`](https://docs.github.com/en/rest/repos/repos#list-codeowners-errors)). It's the same evaluation GitHub uses to request reviews, so it reports owners that don't exist, can't be seen, or don't have write access to the repository.
 
-1. Information about organization teams and their repositories is not publicly available.
-2. If you set GitHub Enterprise base URL, an unauthorized error may occur.
-3. For unauthenticated requests, the rate limit allows for up to 60 requests per hour. Unauthenticated requests are associated with the originating IP address. In a big organization where you have a lot of calls between your infrastructure server and the GitHub site, it is easy to exceed that quota.
+The check works without credentials for public repositories, but unauthenticated requests are limited to 60 per hour per IP address. Private repositories, GitHub Enterprise, and shared CI runners need credentials: either a [token](#github-tokens) or a [GitHub App](#github-app). The other checks don't call GitHub.
 
-The Codeowners Validator source code is available on GitHub. You can always perform a security audit against its code base and build your own version from the source code if your organization is stricter about the software run in its infrastructure.
+## GitHub tokens
 
-You can either use a [personal access token](#github-personal-access-token) or a [GitHub App](#github-app).
+The token needs read access to the repository's contents:
 
-## GitHub personal access token
-
-Instructions for creating a token can be found [here](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/#creating-a-token). The minimal scope required for the token is **read-only**, but the definition of this scope differs between public and private repositories.
-
-#### Public repositories
-
-For public repositories, select `public_repo` and `read:org`:
-
-![token-public.png](./assets/token-public.png)
-
-#### Private repositories
-
-For private repositories, select `repo` and `read:org`:
-
-![token-public.png](./assets/token-private.png)
+| Token                                                                                                                                                                | Permission                                                                                                                 |
+|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|
+| [`GITHUB_TOKEN`](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication) in GitHub Actions                     | `contents: read`, the default. The GitHub Action uses it unless you set `github_access_token` or a GitHub App.             |
+| [Fine-grained personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)           | Repository permission **Contents: Read-only** on the repository.                                                           |
+| [Personal access token (classic)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)              | No scope for public repositories, `repo` for private repositories.                                                         |
 
 
 ## GitHub App
@@ -36,8 +24,8 @@ Here are the steps to create a GitHub App and use it for this tool:
 1. [Create a GitHub App](https://docs.github.com/en/developers/apps/building-github-apps/creating-a-github-app).
     > **Note**
     > Your app does not need a callback or a webhook URL.
-2. Add a read-only permission to the "Members" item of organization permissions.
-3. [Install the app in your organization](https://docs.github.com/en/developers/apps/managing-github-apps/installing-github-apps).
+2. Add the **Contents: Read-only** repository permission.
+3. [Install the app](https://docs.github.com/en/developers/apps/managing-github-apps/installing-github-apps) on the repository whose CODEOWNERS file you validate.
 4. Done! To authenticate with your app, you need:
 
     | Name                       | Description                                                                                                                                                                                                                                       |
@@ -46,7 +34,7 @@ Here are the steps to create a GitHub App and use it for this tool:
     | GitHub App ID              | Found in the app's "About" page (Organization settings -> Developer settings -> Edit button on your app).                                                                                                                                         |
     | GitHub App Installation ID | Found in the URL your organization's app install page (Organization settings -> Github Apps -> Configure button on your app). It's the last number in the URL, ex: `https://github.com/organizations/{my-org}/settings/installations/1234567890`. |
 
-6. Depends on the usage you need to:
+5. Depends on the usage you need to:
 
    1. **CLI:** Export them as environment variable:
       - `GITHUB_APP_INSTALLATION_ID`
