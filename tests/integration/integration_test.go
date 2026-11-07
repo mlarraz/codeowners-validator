@@ -82,16 +82,14 @@ func TestCheckSuccess(t *testing.T) {
 				{
 					name: "avoid-shadowing",
 					envs: Envs{
-						"CHECKS":              "disable-all",
-						"EXPERIMENTAL_CHECKS": "avoid-shadowing",
+						"CHECKS": "avoid-shadowing",
 					},
 				},
 				{
 					name: "notowned",
 					envs: Envs{
-						"PATH":                os.Getenv("PATH"), // need to be set to find the `git` binary
-						"CHECKS":              "disable-all",
-						"EXPERIMENTAL_CHECKS": "notowned",
+						"PATH":   os.Getenv("PATH"), // need to be set to find the `git` binary
+						"CHECKS": "notowned",
 					},
 					skipOS: "windows",
 				},
@@ -226,16 +224,14 @@ func TestCheckFailures(t *testing.T) {
 		{
 			name: "avoid-shadowing",
 			envs: Envs{
-				"CHECKS":              "disable-all",
-				"EXPERIMENTAL_CHECKS": "avoid-shadowing",
+				"CHECKS": "avoid-shadowing",
 			},
 		},
 		{
 			name: "notowned",
 			envs: Envs{
 				"PATH":                            os.Getenv("PATH"), // need to be set to find the `git` binary
-				"CHECKS":                          "disable-all",
-				"EXPERIMENTAL_CHECKS":             "notowned",
+				"CHECKS":                          "notowned",
 				"NOT_OWNED_CHECKER_SKIP_PATTERNS": "*",
 			},
 		},
@@ -243,8 +239,7 @@ func TestCheckFailures(t *testing.T) {
 			name: "notowned_sub_dirs",
 			envs: Envs{
 				"PATH":                             os.Getenv("PATH"), // need to be set to find the `git` binary
-				"CHECKS":                           "disable-all",
-				"EXPERIMENTAL_CHECKS":              "notowned",
+				"CHECKS":                           "notowned",
 				"NOT_OWNED_CHECKER_SKIP_PATTERNS":  "*",
 				"NOT_OWNED_CHECKER_SUBDIRECTORIES": "notowned/dir",
 			},
@@ -311,8 +306,7 @@ func TestCheckSparseBloblessClone(t *testing.T) {
 			name: "notowned",
 			envs: map[string]string{
 				"PATH":                            os.Getenv("PATH"), // need to be set to find the `git` binary
-				"CHECKS":                          "disable-all",
-				"EXPERIMENTAL_CHECKS":             "notowned",
+				"CHECKS":                          "notowned",
 				"NOT_OWNED_CHECKER_SKIP_PATTERNS": "*",
 			},
 			wantContains: "Found 4 not owned files",

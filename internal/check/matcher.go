@@ -340,3 +340,83 @@ func (m *pathMatcher) notOwned(ctx context.Context, keep func(*pathPattern) bool
 	}
 	return unownedFiles, nil
 }
+
+// shadowedRule is a rule that matches files, all of which are matched by later rules.
+type shadowedRule struct {
+	rule *pathPattern
+	// by are the indexes of the later rules that take precedence for the files, in ascending order.
+	by []int
+}
+
+// shadowed returns the valid rules that match at least one file but don't own any, because GitHub
+// uses the last rule that matches a file and later rules match every file that they match. The
+// rules are returned in the order of the CODEOWNERS file.
+func (m *pathMatcher) shadowed(ctx context.Context) ([]shadowedRule, error) {
+	// ownedBy is the index of the rule that owns each file, the last one that matches it, or -1.
+	// The rules are visited from the last one, so a file is owned by the first rule that matches it.
+	ownedBy := make([]int, len(m.files))
+	for j := range ownedBy {
+		ownedBy[j] = -1
+	}
+
+	var result []shadowedRule
+	for i := len(m.rules) - 1; i >= 0; i-- {
+		if ctxutil.ShouldExit(ctx) {
+			return nil, ctx.Err()
+		}
+		p := &m.rules[i]
+		if p.err != nil {
+			continue
+		}
+
+		owns := false
+		for _, r := range p.ranges {
+			for j := r.lo; j < r.hi; j++ {
+				if ownedBy[j] >= 0 {
+					continue
+				}
+				match, err := p.matches(m.files[j])
+				if err != nil {
+					return nil, err
+				}
+				if match {
+					ownedBy[j] = i
+					owns = true
+				}
+			}
+		}
+		if owns {
+			continue
+		}
+
+		// Every file that the rule matches, if any, is owned by a later rule.
+		by := map[int]struct{}{}
+		for _, r := range p.ranges {
+			for j := r.lo; j < r.hi; j++ {
+				match, err := p.matches(m.files[j])
+				if err != nil {
+					return nil, err
+				}
+				if match {
+					by[ownedBy[j]] = struct{}{}
+				}
+			}
+		}
+		if len(by) == 0 {
+			// The rule doesn't match any file, which the files check reports.
+			continue
+		}
+
+		s := shadowedRule{rule: p, by: make([]int, 0, len(by))}
+		for k := range by {
+			s.by = append(s.by, k)
+		}
+		sort.Ints(s.by)
+		result = append(result, s)
+	}
+
+	for l, r := 0, len(result)-1; l < r; l, r = l+1, r-1 {
+		result[l], result[r] = result[r], result[l]
+	}
+	return result, nil
+}

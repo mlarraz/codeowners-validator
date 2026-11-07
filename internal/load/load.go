@@ -10,26 +10,31 @@ import (
 	"github.com/pkg/errors"
 )
 
-// For now, it is a good enough solution to init checks. Important thing is to do not require env variables
-// and do not create clients which will not be used because of the given checker.
-//
-// MAYBE in the future the https://github.com/uber-go/dig will be used.
-func Checks(ctx context.Context, enabledChecks, experimentalChecks []string) ([]check.Checker, error) {
+// defaultChecks are the checks that run when none are listed.
+var defaultChecks = []string{"syntax", "duppatterns", "files", "owners"}
+
+// Checks returns the listed checks, or the default checks if none are listed. Only the listed
+// checks read their configuration and create clients.
+func Checks(ctx context.Context, enabledChecks []string) ([]check.Checker, error) {
+	if len(enabledChecks) == 0 {
+		enabledChecks = defaultChecks
+	}
+
 	var checks []check.Checker
 
-	if isEnabled(enabledChecks, "syntax") {
+	if contains(enabledChecks, "syntax") {
 		checks = append(checks, check.NewValidSyntax())
 	}
 
-	if isEnabled(enabledChecks, "duppatterns") {
+	if contains(enabledChecks, "duppatterns") {
 		checks = append(checks, check.NewDuplicatedPattern())
 	}
 
-	if isEnabled(enabledChecks, "files") {
+	if contains(enabledChecks, "files") {
 		checks = append(checks, check.NewFileExist())
 	}
 
-	if isEnabled(enabledChecks, "owners") {
+	if contains(enabledChecks, "owners") {
 		var cfg struct {
 			OwnerChecker check.ValidOwnerConfig
 			Github       github.ClientConfig
@@ -51,18 +56,7 @@ func Checks(ctx context.Context, enabledChecks, experimentalChecks []string) ([]
 		checks = append(checks, owners)
 	}
 
-	expChecks, err := loadExperimentalChecks(experimentalChecks)
-	if err != nil {
-		return nil, errors.Wrap(err, "while loading experimental checks")
-	}
-
-	return append(checks, expChecks...), nil
-}
-
-func loadExperimentalChecks(experimentalChecks []string) ([]check.Checker, error) {
-	var checks []check.Checker
-
-	if contains(experimentalChecks, "notowned") {
+	if contains(enabledChecks, "notowned") {
 		var cfg struct {
 			NotOwnedChecker check.NotOwnedFileConfig
 		}
@@ -73,23 +67,11 @@ func loadExperimentalChecks(experimentalChecks []string) ([]check.Checker, error
 		checks = append(checks, check.NewNotOwnedFile(cfg.NotOwnedChecker))
 	}
 
-	if contains(experimentalChecks, "avoid-shadowing") {
+	if contains(enabledChecks, "avoid-shadowing") {
 		checks = append(checks, check.NewAvoidShadowing())
 	}
 
 	return checks, nil
-}
-
-func isEnabled(checks []string, name string) bool {
-	// if a user does not specify concrete checks then all checks are enabled
-	if len(checks) == 0 {
-		return true
-	}
-
-	if contains(checks, name) {
-		return true
-	}
-	return false
 }
 
 func contains(checks []string, name string) bool {

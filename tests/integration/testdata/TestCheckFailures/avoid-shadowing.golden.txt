@@ -1,6 +1,7 @@
-==> Executing [Experimental] Avoid Shadowing Checker (<duration>)
-    [err] line 11: Pattern "/some/awesome/dir" shadows the following patterns:
-            * 10: "/some/awesome/dir"
-Entries should go from least-specific to most-specific.
+==> Executing Avoid Shadowing Checker (<duration>)
+    [err] line 10: Pattern "/some/awesome/dir" has no effect: later lines take precedence for every file it matches:
+            * 11: "/some/awesome/dir"
+    [err] line 22: Pattern "/apps/" has no effect: later lines take precedence for every file it matches:
+            * 23: "/apps/github"
 
 1 check(s) executed, 1 failure(s)
