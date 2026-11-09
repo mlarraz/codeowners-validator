@@ -85,7 +85,7 @@ runs:
       shell: bash
       env:
         # The release that the action installs. The release process updates it, see docs/release.md.
-        VERSION: "v0.9.0"
+        VERSION: "v0.9.1"
         # The GitHub CLI reads the release attestation with the workflow's token, see docs/gh-action.md.
         GH_TOKEN: ${{ github.token }}
       run: |
