@@ -26,4 +26,6 @@ Releases are built by the [Release](../.github/workflows/release.yml) workflow, 
    - pushes a `linux/amd64` and `linux/arm64` image to `ghcr.io/mlarraz/codeowners-validator`, tagged `v0.9.0`, `v0.9`, `v0`, and `stable`,
    - creates a draft GitHub release with a changelog of the commits since the previous tag.
 
-4. Review the draft on the [releases page](https://github.com/mlarraz/codeowners-validator/releases) and publish it. The action can't install the new version until then, because the assets of a draft release can't be downloaded. To list the release on GitHub Marketplace, select **Publish this Action to the GitHub Marketplace** before publishing.
+4. Review the draft on the [releases page](https://github.com/mlarraz/codeowners-validator/releases) and publish it. The action can't install the new version until then, because the assets of a draft release can't be downloaded and the release attestation that the action verifies is created when the release is published. To list the release on GitHub Marketplace, select **Publish this Action to the GitHub Marketplace** before publishing.
+
+   [Immutable releases](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases) are enabled for this repository: once the release is published, its tag and assets can't change, and the tag can't be used again, even if the release is deleted. Fix a published release with a new version.

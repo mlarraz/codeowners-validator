@@ -86,7 +86,15 @@ runs:
       env:
         # The release that the action installs. The release process updates it, see docs/release.md.
         VERSION: "v0.9.0"
-      run: sh "$GITHUB_ACTION_PATH/install.sh" -b "$RUNNER_TEMP/codeowners-validator" "$VERSION"
+        # The GitHub CLI reads the release attestation with the workflow's token, see docs/gh-action.md.
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        # The workflow's token can only read the release attestation on github.com.
+        if [ "$GITHUB_SERVER_URL" = "https://github.com" ]; then
+          sh "$GITHUB_ACTION_PATH/install.sh" -a -b "$RUNNER_TEMP/codeowners-validator" "$VERSION"
+        else
+          sh "$GITHUB_ACTION_PATH/install.sh" -b "$RUNNER_TEMP/codeowners-validator" "$VERSION"
+        fi
 
     - name: Validate CODEOWNERS
       shell: bash

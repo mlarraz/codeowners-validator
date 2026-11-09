@@ -135,7 +135,9 @@ On `pull_request` events, `actions/checkout` checks out the pull request's merge
 
 ## Runners
 
-The action installs the release binary for the runner's operating system and architecture: it downloads the archive from this repository's [releases](https://github.com/mlarraz/codeowners-validator/releases), verifies it against the release's `checksums.txt`, and runs it. It doesn't need Docker, so it runs on Linux runners, including `ubuntu-slim`, as well as macOS and Windows runners. The runner needs `bash`, `curl` or `wget`, and `tar` (`unzip` on Windows).
+The action installs the release binary for the runner's operating system and architecture: it downloads the archive from this repository's [releases](https://github.com/mlarraz/codeowners-validator/releases), verifies it against the release's `checksums.txt` and the release attestation, and runs it. It doesn't need Docker, so it runs on Linux runners, including `ubuntu-slim`, as well as macOS and Windows runners. The runner needs `bash`, `curl` or `wget`, `tar` (`unzip` on Windows), and the [GitHub CLI](https://cli.github.com/), which GitHub-hosted runners have.
+
+Releases are [immutable](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases): once a release is published, its tag and files can't change, and GitHub signs a release attestation that lists its files. The action verifies the downloaded archive against the attestation with `gh release verify-asset`, so pinning the action to a commit also pins the binary that it runs. The GitHub CLI reads the attestation with the workflow's token; the `contents: read` permission that the `owners` check needs is enough. On GitHub Enterprise Server, the workflow's token can't read the attestation from github.com, so the action only verifies the checksum.
 
 <!--- example repository when failed -->
 
