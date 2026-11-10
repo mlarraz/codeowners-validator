@@ -90,11 +90,14 @@ func (bldr *OutputBuilder) Output() Output {
 	return Output{Issues: bldr.issues}
 }
 
+// SeverityType is the severity of an issue. Lower values are more severe.
 type SeverityType int
 
 const (
 	Error SeverityType = iota + 1
 	Warning
+	// Info issues are reported but never fail the validation, whatever CHECK_FAILURE_LEVEL is.
+	Info
 )
 
 func (s SeverityType) String() string {
@@ -103,6 +106,8 @@ func (s SeverityType) String() string {
 		return "Error"
 	case Warning:
 		return "Warning"
+	case Info:
+		return "Info"
 	default:
 		return ""
 	}
@@ -121,4 +126,39 @@ func (s *SeverityType) Unmarshal(in string) error {
 	}
 
 	return nil
+}
+
+// ParseLevel parses the level of a check, the most severe level at which the check reports its
+// issues. Possible values are warning and info.
+func ParseLevel(in string) (SeverityType, error) {
+	switch strings.ToLower(in) {
+	case "warning", "warn":
+		return Warning, nil
+	case "info":
+		return Info, nil
+	default:
+		return 0, fmt.Errorf("not a valid check level: %q, possible values are warning and info", in)
+	}
+}
+
+// WithLevel returns a checker that runs c and reports its issues at the given level at most: with
+// Info, all of its issues are reported as Info issues and never fail the validation. Errors that
+// stop the check from running are still reported as failures.
+func WithLevel(c Checker, level SeverityType) Checker {
+	return leveledChecker{Checker: c, level: level}
+}
+
+type leveledChecker struct {
+	Checker
+	level SeverityType
+}
+
+func (c leveledChecker) Check(ctx context.Context, in Input) (Output, error) {
+	out, err := c.Checker.Check(ctx, in)
+	for i := range out.Issues {
+		if out.Issues[i].Severity < c.level {
+			out.Issues[i].Severity = c.level
+		}
+	}
+	return out, err
 }

@@ -2,6 +2,7 @@ package load
 
 import (
 	"context"
+	"strings"
 
 	"github.com/mlarraz/codeowners-validator/internal/check"
 	"github.com/mlarraz/codeowners-validator/internal/envconfig"
@@ -15,26 +16,54 @@ var defaultChecks = []string{"syntax", "duppatterns", "files", "owners"}
 
 // Checks returns the listed checks, or the default checks if none are listed. Only the listed
 // checks read their configuration and create clients.
+//
+// A check can be listed with a level, as name:level, to report its issues at that level at most,
+// see check.ParseLevel.
 func Checks(ctx context.Context, enabledChecks []string) ([]check.Checker, error) {
 	if len(enabledChecks) == 0 {
 		enabledChecks = defaultChecks
 	}
 
+	levels := make(map[string]check.SeverityType, len(enabledChecks))
+	for _, c := range enabledChecks {
+		name, level, hasLevel := strings.Cut(c, ":")
+		levels[name] = 0
+		if !hasLevel {
+			continue
+		}
+		l, err := check.ParseLevel(level)
+		if err != nil {
+			return nil, errors.Wrapf(err, "while reading the level of the %s check", name)
+		}
+		levels[name] = l
+	}
+
+	enabled := func(name string) bool {
+		_, ok := levels[name]
+		return ok
+	}
+
 	var checks []check.Checker
-
-	if contains(enabledChecks, "syntax") {
-		checks = append(checks, check.NewValidSyntax())
+	add := func(name string, c check.Checker) {
+		if level := levels[name]; level != 0 {
+			c = check.WithLevel(c, level)
+		}
+		checks = append(checks, c)
 	}
 
-	if contains(enabledChecks, "duppatterns") {
-		checks = append(checks, check.NewDuplicatedPattern())
+	if enabled("syntax") {
+		add("syntax", check.NewValidSyntax())
 	}
 
-	if contains(enabledChecks, "files") {
-		checks = append(checks, check.NewFileExist())
+	if enabled("duppatterns") {
+		add("duppatterns", check.NewDuplicatedPattern())
 	}
 
-	if contains(enabledChecks, "owners") {
+	if enabled("files") {
+		add("files", check.NewFileExist())
+	}
+
+	if enabled("owners") {
 		var cfg struct {
 			OwnerChecker check.ValidOwnerConfig
 			Github       github.ClientConfig
@@ -53,10 +82,10 @@ func Checks(ctx context.Context, enabledChecks []string) ([]check.Checker, error
 			return nil, errors.Wrap(err, "while enabling 'owners' checker")
 		}
 
-		checks = append(checks, owners)
+		add("owners", owners)
 	}
 
-	if contains(enabledChecks, "notowned") {
+	if enabled("notowned") {
 		var cfg struct {
 			NotOwnedChecker check.NotOwnedFileConfig
 		}
@@ -64,21 +93,12 @@ func Checks(ctx context.Context, enabledChecks []string) ([]check.Checker, error
 			return nil, errors.Wrapf(err, "while loading config for %s", "notowned")
 		}
 
-		checks = append(checks, check.NewNotOwnedFile(cfg.NotOwnedChecker))
+		add("notowned", check.NewNotOwnedFile(cfg.NotOwnedChecker))
 	}
 
-	if contains(enabledChecks, "avoid-shadowing") {
-		checks = append(checks, check.NewAvoidShadowing())
+	if enabled("avoid-shadowing") {
+		add("avoid-shadowing", check.NewAvoidShadowing())
 	}
 
 	return checks, nil
-}
-
-func contains(checks []string, name string) bool {
-	for _, c := range checks {
-		if c == name {
-			return true
-		}
-	}
-	return false
 }

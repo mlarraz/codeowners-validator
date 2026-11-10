@@ -34,7 +34,7 @@ inputs:
     required: false
 
   checks:
-    description: "The comma-separated list of checks to run. Defaults to syntax,duppatterns,files,owners. Possible values: syntax,duppatterns,files,owners,notowned,avoid-shadowing"
+    description: "The comma-separated list of checks to run. Defaults to syntax,duppatterns,files,owners. Possible values: syntax,duppatterns,files,owners,notowned,avoid-shadowing. Add :warning or :info to a check to report its issues at that level at most, for example files:info; info issues never fail the action."
     required: false
     default: ""
 

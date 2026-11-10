@@ -75,7 +75,7 @@ jobs:
 
           # ==== GitHub Auth ====
 
-          # The comma-separated list of checks to run. Defaults to syntax,duppatterns,files,owners. Possible values: syntax,duppatterns,files,owners,notowned,avoid-shadowing
+          # The comma-separated list of checks to run. Defaults to syntax,duppatterns,files,owners. Possible values: syntax,duppatterns,files,owners,notowned,avoid-shadowing. Add :warning or :info to a check to report its issues at that level at most, see "Check levels" below.
           checks: "syntax,duppatterns,files,owners,notowned,avoid-shadowing"
 
           # The GitHub base URL for API requests. Defaults to the public GitHub API, but can be set to a domain endpoint to use with GitHub Enterprise.
@@ -121,6 +121,19 @@ The best is to run this as a cron job and not only if you applying changes to CO
 ## Annotations and job summary
 
 In GitHub Actions, where `GITHUB_ACTIONS` is `true`, the validator also reports every issue as an [annotation](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) on the CODEOWNERS file, so that pull requests show the issues on the lines they refer to, and adds a table of the results to the [job summary](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#adding-a-job-summary). GitHub limits the number of annotations it shows, and the job summary truncates very long outputs, such as thousands of not owned files; the job log always has every issue.
+
+## Check levels
+
+A check listed with a level, as `name:level`, reports its issues at that level at most, so that you can turn on a check before its issues are fixed:
+
+```yaml
+checks: "syntax,duppatterns,owners,files:info,avoid-shadowing:info"
+```
+
+- `info` reports the issues as notices. They're listed in the job log, as annotations, and in the job summary, but never fail the action, whatever `check_failure_level` is.
+- `warning` reports the issues as warnings, which fail the action only when `check_failure_level` is `warning`, the default.
+
+A check that can't run, for example because of a GitHub API error, still fails the action.
 
 ## Checkout
 

@@ -84,15 +84,20 @@ func (r *CheckRunner) ShouldExitWithCheckFailure() bool {
 func (r *CheckRunner) collectMetrics(checkOut check.Output, err error) {
 	r.m.Lock()
 	defer r.m.Unlock()
+	failed := err != nil
 	for _, i := range checkOut.Issues {
 		r.allFoundIssues[i.Severity]++
+		if i.Severity <= r.treatedAsFailure {
+			failed = true
+		}
 	}
 
 	if err != nil {
 		r.allFoundIssues[check.Error]++
 	}
 
-	if len(checkOut.Issues) > 0 || err != nil {
+	// A check whose issues are all below the failure level, such as Info issues, didn't fail.
+	if failed {
 		r.notPassedChecksCnt++
 	}
 }
