@@ -2,8 +2,10 @@ package load
 
 import (
 	"context"
+	"slices"
 	"strings"
 
+	"github.com/mlarraz/codeowners-validator/internal/baseline"
 	"github.com/mlarraz/codeowners-validator/internal/check"
 	"github.com/mlarraz/codeowners-validator/internal/envconfig"
 	"github.com/mlarraz/codeowners-validator/internal/github"
@@ -14,14 +16,30 @@ import (
 // defaultChecks are the checks that run when none are listed.
 var defaultChecks = []string{"syntax", "duppatterns", "files", "owners"}
 
+// allChecks are the names of all checks.
+var allChecks = []string{"syntax", "duppatterns", "files", "owners", "notowned", "avoid-shadowing"}
+
+// Check is a check and the name that it's listed with in CHECKS and in the baseline.
+type Check struct {
+	Name    string
+	Checker check.Checker
+}
+
 // Checks returns the listed checks, or the default checks if none are listed. Only the listed
 // checks read their configuration and create clients.
 //
 // A check can be listed with a level, as name:level, to report its issues at that level at most,
-// see check.ParseLevel.
-func Checks(ctx context.Context, enabledChecks []string) ([]check.Checker, error) {
+// see check.ParseLevel. The issues listed in known are reported as baselined, see
+// check.WithBaseline.
+func Checks(ctx context.Context, enabledChecks []string, known baseline.Baseline) ([]Check, error) {
 	if len(enabledChecks) == 0 {
 		enabledChecks = defaultChecks
+	}
+
+	for name := range known {
+		if !slices.Contains(allChecks, name) {
+			return nil, errors.Errorf("the baseline lists issues of %q, which isn't a check; possible checks: %s", name, strings.Join(allChecks, ","))
+		}
 	}
 
 	levels := make(map[string]check.SeverityType, len(enabledChecks))
@@ -43,12 +61,16 @@ func Checks(ctx context.Context, enabledChecks []string) ([]check.Checker, error
 		return ok
 	}
 
-	var checks []check.Checker
+	var checks []Check
 	add := func(name string, c check.Checker) {
+		if keys, ok := known[name]; ok {
+			c = check.WithBaseline(c, keys)
+		}
+		// The level applies to the baseline's warnings about stale entries too.
 		if level := levels[name]; level != 0 {
 			c = check.WithLevel(c, level)
 		}
-		checks = append(checks, c)
+		checks = append(checks, Check{Name: name, Checker: c})
 	}
 
 	if enabled("syntax") {

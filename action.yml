@@ -47,6 +47,11 @@ inputs:
     description: "Defines the level on which the application should treat check issues as failures. Defaults to warning, which treats both errors and warnings as failures, and exits with error code 3. Possible values are error and warning. Default: warning"
     required: false
 
+  baseline_path:
+    description: "The path of the baseline file, relative to repository_path. The issues that it lists are reported but don't fail the action; entries that don't match any issue anymore are reported as warnings. Generate it with the baseline command, see docs/gh-action.md. Add it to the sparse checkout."
+    required: false
+    default: ""
+
   not_owned_checker_skip_patterns:
     description: "The comma-separated list of patterns that should be ignored by not-owned-checker. For example, you can specify * and as a result, the * pattern from the CODEOWNERS file will be ignored and files owned by this pattern will be reported as unowned unless a later specific pattern will match that path. It's useful because often we have default owners entry at the begging of the CODOEWNERS file, e.g. * @global-owner1 @global-owner2"
     required: false
@@ -110,6 +115,7 @@ runs:
         INPUT_CHECKS: ${{ inputs.checks }}
         INPUT_REPOSITORY_PATH: ${{ inputs.repository_path }}
         INPUT_CHECK_FAILURE_LEVEL: ${{ inputs.check_failure_level }}
+        INPUT_BASELINE_PATH: ${{ inputs.baseline_path }}
         INPUT_NOT_OWNED_CHECKER_SKIP_PATTERNS: ${{ inputs.not_owned_checker_skip_patterns }}
         INPUT_OWNER_CHECKER_REPOSITORY: ${{ inputs.owner_checker_repository }}
         INPUT_OWNER_CHECKER_REF: ${{ inputs.owner_checker_ref }}

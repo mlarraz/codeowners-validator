@@ -27,6 +27,7 @@ func TestValidSyntaxChecker(t *testing.T) {
 				Severity: check.Warning,
 				LineNo:   ptr.Uint64Ptr(1),
 				Message:  "Owner '@-' does not look like a GitHub username or team name",
+				Key:      "Owner '@-' does not look like a GitHub username or team name: pkg/github.com/** @-",
 			},
 		},
 		"Bad org": {
@@ -35,6 +36,7 @@ func TestValidSyntaxChecker(t *testing.T) {
 				Severity: check.Warning,
 				LineNo:   ptr.Uint64Ptr(1),
 				Message:  "Owner '@bad+org' does not look like a GitHub username or team name",
+				Key:      "Owner '@bad+org' does not look like a GitHub username or team name: * @bad+org",
 			},
 		},
 		"Bad team name on first place": {
@@ -43,6 +45,7 @@ func TestValidSyntaxChecker(t *testing.T) {
 				Severity: check.Warning,
 				LineNo:   ptr.Uint64Ptr(1),
 				Message:  "Owner '@org/+not+a+good+name' does not look like a GitHub username or team name",
+				Key:      "Owner '@org/+not+a+good+name' does not look like a GitHub username or team name: * @org/+not+a+good+name",
 			},
 		},
 		"Bad team name on second place": {
@@ -51,6 +54,7 @@ func TestValidSyntaxChecker(t *testing.T) {
 				Severity: check.Warning,
 				LineNo:   ptr.Uint64Ptr(1),
 				Message:  "Owner '@org/-a-team' does not look like a GitHub username or team name",
+				Key:      "Owner '@org/-a-team' does not look like a GitHub username or team name: * @org/hakuna-matata @org/-a-team",
 			},
 		},
 		"Doesn't look like username, team name, nor email": {
@@ -59,6 +63,7 @@ func TestValidSyntaxChecker(t *testing.T) {
 				Severity: check.Error,
 				LineNo:   ptr.Uint64Ptr(1),
 				Message:  "Owner 'something_weird' does not look like an email",
+				Key:      "Owner 'something_weird' does not look like an email: * something_weird",
 			},
 		},
 		"Comment in pattern line": {
@@ -95,6 +100,7 @@ func TestValidSyntaxZeroValueEntry(t *testing.T) {
 			LineNo:   ptr.Uint64Ptr(0),
 			Severity: check.Error,
 			Message:  "Missing pattern",
+			Key:      "Missing pattern",
 		},
 	}
 
@@ -122,6 +128,7 @@ func TestValidSyntaxFileSize(t *testing.T) {
 			issue: &check.Issue{
 				Severity: check.Warning,
 				Message:  "The CODEOWNERS file is 2,516,583 bytes, 80% of GitHub's limit of 3,145,728 bytes (3 MiB). GitHub ignores a file over the limit.",
+				Key:      "CODEOWNERS file near the size limit",
 			},
 		},
 		"At the limit, which GitHub still loads": {
@@ -129,6 +136,7 @@ func TestValidSyntaxFileSize(t *testing.T) {
 			issue: &check.Issue{
 				Severity: check.Warning,
 				Message:  "The CODEOWNERS file is 3,145,728 bytes, 100% of GitHub's limit of 3,145,728 bytes (3 MiB). GitHub ignores a file over the limit.",
+				Key:      "CODEOWNERS file near the size limit",
 			},
 		},
 		"Over the limit": {
@@ -136,6 +144,7 @@ func TestValidSyntaxFileSize(t *testing.T) {
 			issue: &check.Issue{
 				Severity: check.Error,
 				Message:  "The CODEOWNERS file is 3,145,729 bytes, over GitHub's limit of 3,145,728 bytes (3 MiB). GitHub ignores the file and doesn't request reviews from code owners.",
+				Key:      "CODEOWNERS file over the size limit",
 			},
 		},
 	}

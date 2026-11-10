@@ -67,6 +67,33 @@ func TestGitHubActionsPrinter(t *testing.T) {
 		"\n</details>\n", string(got))
 }
 
+func TestGitHubActionsPrinterBaselinedIssues(t *testing.T) {
+	// given
+	buff := &bytes.Buffer{}
+	restore := overrideWriter(buff)
+	defer restore()
+
+	summary := filepath.Join(t.TempDir(), "summary.md")
+	p := NewGitHubActionsPrinter("/repo/CODEOWNERS", summary)
+
+	// when
+	p.PrintCheckResult("Foo Checker", time.Second, check.Output{Issues: []check.Issue{
+		{Severity: check.Info, LineNo: ptr.Uint64Ptr(2), Message: "known", Key: "/a", Baselined: true},
+		{Severity: check.Error, LineNo: ptr.Uint64Ptr(3), Message: "new", Key: "/b"},
+	}}, nil)
+	p.PrintSummary(1, 1)
+
+	// then
+	out := buff.String()
+	assert.Contains(t, out, "::error file=/repo/CODEOWNERS,line=3,title=Foo Checker::new\n")
+	assert.NotContains(t, out, "::notice", "baselined issues aren't annotated")
+
+	got, err := os.ReadFile(summary)
+	require.NoError(t, err)
+	assert.Contains(t, string(got), "| Foo Checker | 1 error, 1 in baseline |\n")
+	assert.Contains(t, string(got), "[err] line 3: new\n[inf] line 2 (in baseline): known\n", "new issues are listed first")
+}
+
 func TestIssuesTextTruncation(t *testing.T) {
 	// given
 	line := strings.Repeat("x", 99)

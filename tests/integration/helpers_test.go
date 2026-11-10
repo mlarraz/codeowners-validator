@@ -102,6 +102,7 @@ type Executor struct {
 	envs       map[string]string
 	timeout    time.Duration
 	binaryPath string
+	args       []string
 }
 
 func Exec() *Executor {
@@ -129,7 +130,7 @@ func (s *Executor) AwaitResultAtMost(timeout time.Duration) *ExecuteOutput {
 
 	var stdout, stderr bytes.Buffer
 
-	cmd := exec.CommandContext(ctx, s.binaryPath)
+	cmd := exec.CommandContext(ctx, s.binaryPath, s.args...)
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
 
@@ -153,5 +154,11 @@ func (s *Executor) WithTimeout(timeout time.Duration) *Executor {
 
 func (s *Executor) Binary(binaryPath string) *Executor {
 	s.binaryPath = binaryPath
+	return s
+}
+
+// WithArgs sets the command-line arguments.
+func (s *Executor) WithArgs(args ...string) *Executor {
+	s.args = args
 	return s
 }

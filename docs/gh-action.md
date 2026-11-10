@@ -90,6 +90,9 @@ jobs:
           # Defines the level on which the application should treat check issues as failures. Defaults to warning, which treats both errors and warnings as failures, and exits with error code 3. Possible values are error and warning. Default: warning"
           check_failure_level: "warning"
 
+          # The path of the baseline file, relative to repository_path. The issues that it lists are reported but don't fail the action. See "Baseline" below.
+          baseline_path: ""
+
           # The comma-separated list of patterns that should be ignored by not-owned-checker. For example, you can specify * and as a result, the * pattern from the CODEOWNERS file will be ignored and files owned by this pattern will be reported as unowned unless a later specific pattern will match that path. It's useful because often we have default owners entry at the begging of the CODOEWNERS file, e.g. * @global-owner1 @global-owner2"
           not_owned_checker_skip_patterns: ""
 
@@ -134,6 +137,45 @@ checks: "syntax,duppatterns,owners,files:info,avoid-shadowing:info"
 - `warning` reports the issues as warnings, which fail the action only when `check_failure_level` is `warning`, the default.
 
 A check that can't run, for example because of a GitHub API error, still fails the action.
+
+## Baseline
+
+A baseline lists the known issues of each check, so that you can turn on a check and fail only on new issues while the known ones are fixed:
+
+1. Generate the baseline with the CLI, with the same checks and configuration as the workflow:
+
+   ```bash
+   CHECKS="files,avoid-shadowing" REPOSITORY_PATH=. BASELINE_PATH=.github/codeowners-baseline.yml codeowners-validator baseline
+   ```
+
+   The command writes the issues of the listed checks and keeps the entries of the other checks, so you can generate it one check at a time.
+
+2. Commit the file and set `baseline_path`. With a sparse checkout, check out the baseline too:
+
+   ```yaml
+   - uses: actions/checkout@v7
+     with:
+       persist-credentials: false
+       sparse-checkout: |
+         .github/CODEOWNERS
+         .github/codeowners-baseline.yml
+       sparse-checkout-cone-mode: false
+   - uses: mlarraz/codeowners-validator@v0.9.1
+     with:
+       checks: "syntax,duppatterns,owners,files,avoid-shadowing"
+       baseline_path: .github/codeowners-baseline.yml
+   ```
+
+The issues in the baseline are reported as info issues marked `(in baseline)` in the job log and the job summary, without annotations. New issues fail as usual. A baseline entry that doesn't match any issue anymore is reported as a warning, so that fixing an issue also removes it from the baseline and the baseline only shrinks. A missing baseline file, or an entry for a check that doesn't exist, fails the action.
+
+Entries identify issues by what doesn't change when other lines of CODEOWNERS are added or removed, not by line number:
+
+| Check | Entry |
+|---|---|
+| `files`, `avoid-shadowing` | the pattern |
+| `duppatterns` | the pattern, with a leading slash if it's anchored at the root |
+| `syntax`, `owners` | the message and the line's pattern and owners, or the message alone for issues about the whole file |
+| `notowned` | none: its files can't be baselined. Use `not_owned_checker_subdirectories` to check the directories that are fully owned, and add more as they're fixed. |
 
 ## Checkout
 

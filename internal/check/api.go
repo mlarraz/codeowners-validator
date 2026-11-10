@@ -22,6 +22,12 @@ type (
 		Severity SeverityType // enum // default error
 		LineNo   *uint64
 		Message  string
+		// Key identifies the issue among the issues of its check, and stays the same when other
+		// lines of the CODEOWNERS file change, so that a baseline can list known issues. Issues
+		// without a key can't be baselined.
+		Key string
+		// Baselined is true if the issue is listed in the baseline.
+		Baselined bool
 	}
 
 	Input struct {
@@ -60,6 +66,29 @@ func WithEntry(e codeowners.Entry) ReportIssueOpt {
 	return func(i *Issue) {
 		i.LineNo = ptr.Uint64Ptr(e.LineNo)
 	}
+}
+
+// WithKey sets the key of the issue, see Issue.Key.
+func WithKey(key string) ReportIssueOpt {
+	return func(i *Issue) {
+		i.Key = key
+	}
+}
+
+// entryKey returns a key for an issue of the given entry: the message followed by the entry's
+// pattern and owners, with the spacing of the line normalized.
+func entryKey(msg string, e codeowners.Entry) string {
+	return lineKey(msg, strings.Join(append([]string{e.Pattern}, e.Owners...), " "))
+}
+
+// lineKey returns a key for an issue of the given CODEOWNERS line: the message followed by the
+// line, with its spacing normalized.
+func lineKey(msg, line string) string {
+	line = strings.Join(strings.Fields(line), " ")
+	if line == "" {
+		return msg
+	}
+	return msg + ": " + line
 }
 
 func (bldr *OutputBuilder) ReportIssue(msg string, opts ...ReportIssueOpt) *OutputBuilder {

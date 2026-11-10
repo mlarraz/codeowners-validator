@@ -33,9 +33,7 @@ func (tty *TTYPrinter) PrintCheckResult(checkName string, duration time.Duration
 		issueSeverity := tty.severityPrintfFunc(i.Severity)
 
 		issueSeverity(writer, "    [%s]", strings.ToLower(i.Severity.String()[:3]))
-		if i.LineNo != nil {
-			issueBody(writer, " line %d:", *i.LineNo)
-		}
+		issueBody(writer, "%s", issueLocation(i))
 		issueBody(writer, " %s\n", i.Message)
 	}
 
@@ -46,6 +44,22 @@ func (tty *TTYPrinter) PrintCheckResult(checkName string, duration time.Duration
 		errCheck(writer, "    [Internal Error]")
 		issueBody(writer, " %s\n", checkErr)
 	}
+}
+
+// issueLocation returns the line of the issue, and whether it's in the baseline, followed by a
+// colon, or "" if there's neither.
+func issueLocation(i check.Issue) string {
+	var s string
+	if i.LineNo != nil {
+		s += fmt.Sprintf(" line %d", *i.LineNo)
+	}
+	if i.Baselined {
+		s += " (in baseline)"
+	}
+	if s == "" {
+		return ""
+	}
+	return s + ":"
 }
 
 func (*TTYPrinter) severityPrintfFunc(severity check.SeverityType) func(w io.Writer, format string, a ...interface{}) {

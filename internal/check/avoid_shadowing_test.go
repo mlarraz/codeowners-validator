@@ -41,6 +41,7 @@ func TestAvoidShadowing(t *testing.T) {
 					LineNo:   ptr.Uint64Ptr(1),
 					Message: `Pattern "/build/logs/" has no effect: later lines take precedence for every file it matches:
             * 2: "/b*/logs"`,
+					Key: "/build/logs/",
 				},
 				{
 					Severity: check.Error,
@@ -48,12 +49,14 @@ func TestAvoidShadowing(t *testing.T) {
 					Message: `Pattern "/apps/" has no effect: later lines take precedence for every file it matches:
             * 4: "/apps/one"
             * 5: "/apps/two"`,
+					Key: "/apps/",
 				},
 				{
 					Severity: check.Error,
 					LineNo:   ptr.Uint64Ptr(6),
 					Message: `Pattern "/docs/guide.md" has no effect: later lines take precedence for every file it matches:
             * 7: "docs/guide.md"`,
+					Key: "/docs/guide.md",
 				},
 			},
 		},
@@ -67,12 +70,14 @@ func TestAvoidShadowing(t *testing.T) {
 					LineNo:   ptr.Uint64Ptr(1),
 					Message: `Pattern "*.md" has no effect: later lines take precedence for every file it matches:
             * 3: "*"`,
+					Key: "*.md",
 				},
 				{
 					Severity: check.Error,
 					LineNo:   ptr.Uint64Ptr(2),
 					Message: `Pattern "/build/" has no effect: later lines take precedence for every file it matches:
             * 3: "*"`,
+					Key: "/build/",
 				},
 			},
 		},
@@ -94,6 +99,7 @@ func TestAvoidShadowing(t *testing.T) {
             * 10: "/many/f9"
             * 11: "/many/f10"
             * and 2 more`,
+					Key: "/many/",
 				},
 			},
 		},

@@ -33,6 +33,7 @@ func TestDuplicatedPattern(t *testing.T) {
 					Message: `Pattern "/build/logs/" is defined 2 times in lines:
             * 4: with owners: [@doctocat]
             * 5: with owners: [@doctocat]`,
+					Key: "/build/logs/",
 				},
 				{
 					Severity: check.Error,
@@ -40,6 +41,7 @@ func TestDuplicatedPattern(t *testing.T) {
 					Message: `Pattern "/script" is defined 2 times in lines:
             * 7: with owners: [@script-owner]
             * 8: with owners: [m.t@g.com]`,
+					Key: "/script",
 				},
 			},
 		},
@@ -57,6 +59,7 @@ func TestDuplicatedPattern(t *testing.T) {
 					Message: `Pattern "/docs/api" is defined 2 times in lines:
             * 2: "docs/api" with owners: [@docs]
             * 3: "/docs/api" with owners: [@api]`,
+					Key: "/docs/api",
 				},
 				{
 					Severity: check.Error,
@@ -64,6 +67,7 @@ func TestDuplicatedPattern(t *testing.T) {
 					Message: `Pattern "/**/vendor/" is defined 2 times in lines:
             * 4: "**/vendor/" with owners: [@vendor]
             * 5: "/**/vendor/" with owners: [@vendor-again]`,
+					Key: "/**/vendor/",
 				},
 			},
 		},

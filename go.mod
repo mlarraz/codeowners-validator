@@ -17,6 +17,7 @@ require (
 	github.com/vrischmann/envconfig v1.4.1
 	go.szostok.io/version v1.2.0
 	golang.org/x/oauth2 v0.37.0
+	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools v2.2.0+incompatible
 )
 
@@ -56,5 +57,4 @@ require (
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
