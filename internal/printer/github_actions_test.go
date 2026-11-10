@@ -31,6 +31,7 @@ func TestGitHubActionsPrinter(t *testing.T) {
 	p.PrintCheckResult("Foo Checker", time.Second, check.Output{Issues: []check.Issue{
 		{Severity: check.Error, LineNo: ptr.Uint64Ptr(3), Message: "Pattern \"/a\" is defined 2 times in lines:\n * 1\n * 3"},
 		{Severity: check.Warning, Message: "File-level ```warning```"},
+		{Severity: check.Info, LineNo: ptr.Uint64Ptr(5), Message: "Lowered to info"},
 	}}, nil)
 	p.PrintCheckResult("Bar Checker", time.Second, check.Output{}, nil)
 	p.PrintSummary(3, 2)
@@ -40,6 +41,7 @@ func TestGitHubActionsPrinter(t *testing.T) {
 	assert.Contains(t, out, "3 check(s) executed, 2 failure(s)\n"+
 		"::error file=D%3A\\a\\repo%2Cx\\.github\\CODEOWNERS,line=3,title=Foo Checker::Pattern \"/a\" is defined 2 times in lines:%0A * 1%0A * 3\n"+
 		"::warning file=D%3A\\a\\repo%2Cx\\.github\\CODEOWNERS,title=Foo Checker::File-level ```warning```\n"+
+		"::notice file=D%3A\\a\\repo%2Cx\\.github\\CODEOWNERS,line=5,title=Foo Checker::Lowered to info\n"+
 		"::error title=Zed Checker::Internal error: 100%25 broken\n")
 
 	got, err := os.ReadFile(summary)
@@ -48,13 +50,14 @@ func TestGitHubActionsPrinter(t *testing.T) {
 		"## CODEOWNERS Validator\n\n"+
 		"| Check | Result |\n|---|---|\n"+
 		"| Bar Checker | Passed |\n"+
-		"| Foo Checker | 1 error, 1 warning |\n"+
+		"| Foo Checker | 1 error, 1 warning, 1 info |\n"+
 		"| Zed Checker | Internal error |\n"+
 		"\n3 check(s) executed, 2 failure(s)\n"+
 		"\n<details><summary>Foo Checker</summary>\n\n"+
 		"````text\n"+
 		"[err] line 3: Pattern \"/a\" is defined 2 times in lines:\n * 1\n * 3\n"+
 		"[war] File-level ```warning```\n"+
+		"[inf] line 5: Lowered to info\n"+
 		"````\n"+
 		"\n</details>\n"+
 		"\n<details><summary>Zed Checker</summary>\n\n"+

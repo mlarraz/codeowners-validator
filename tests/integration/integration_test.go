@@ -279,6 +279,69 @@ func TestCheckFailures(t *testing.T) {
 	}
 }
 
+// TestCheckLevels tests that a check listed with a level reports its issues at that level, so that
+// it can run without failing the validation.
+func TestCheckLevels(t *testing.T) {
+	type Envs map[string]string
+	tests := []struct {
+		name     string
+		envs     Envs
+		exitCode int
+		golden   bool
+	}{
+		{
+			// A single check, because the checks run in parallel and print in the order they finish.
+			name:     "info",
+			envs:     Envs{"CHECKS": "files:info"},
+			exitCode: 0,
+			golden:   true,
+		},
+		{
+			name:     "warning_with_error_failure_level",
+			envs:     Envs{"CHECKS": "files:warning", "CHECK_FAILURE_LEVEL": "error"},
+			exitCode: 0,
+		},
+		{
+			name:     "warning_with_warning_failure_level",
+			envs:     Envs{"CHECKS": "files:warning"},
+			exitCode: 3,
+		},
+		{
+			name:     "only_the_listed_check_is_lowered",
+			envs:     Envs{"CHECKS": "duppatterns,files:info"},
+			exitCode: 3,
+		},
+		{
+			name:     "invalid_level",
+			envs:     Envs{"CHECKS": "files:error"},
+			exitCode: 1,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			repoDir := SampleRepo(t, codeownersSamplesRepo, "failures")
+
+			codeownersCmd := Exec().
+				Binary(os.Getenv(binaryPathEnvName)).
+				WithEnv("REPOSITORY_PATH", repoDir)
+			for k, v := range tc.envs {
+				codeownersCmd.WithEnv(k, v)
+			}
+
+			// when
+			result := codeownersCmd.AwaitResultAtMost(3 * time.Minute)
+
+			// then
+			assert.Equal(t, tc.exitCode, result.ExitCode, result.Stdout+result.Stderr)
+			if tc.golden {
+				g := goldie.New(t, goldie.WithNameSuffix(".golden.txt"))
+				g.Assert(t, t.Name(), []byte(normalizeTimeDurations(result.Stdout)))
+			}
+		})
+	}
+}
+
 // TestCheckSparseBloblessClone tests that the checks that inspect the files of the repository
 // don't need a full checkout: a blobless clone that contains only the CODEOWNERS file gives the
 // same result as the full checkout.

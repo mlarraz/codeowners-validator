@@ -92,10 +92,14 @@ func (p *GitHubActionsPrinter) printAnnotations(r checkResult) {
 }
 
 func annotationLevel(s check.SeverityType) string {
-	if s == check.Warning {
+	switch s {
+	case check.Info:
+		return "notice"
+	case check.Warning:
 		return "warning"
+	default:
+		return "error"
 	}
-	return "error"
 }
 
 func (p *GitHubActionsPrinter) writeJobSummary(allCheck, failedChecks int) error {
@@ -145,11 +149,14 @@ func resultText(r checkResult) string {
 		return "Internal error"
 	}
 
-	var errs, warnings int
+	var errs, warnings, infos int
 	for _, i := range r.out.Issues {
-		if i.Severity == check.Warning {
+		switch i.Severity {
+		case check.Info:
+			infos++
+		case check.Warning:
 			warnings++
-		} else {
+		default:
 			errs++
 		}
 	}
@@ -160,6 +167,9 @@ func resultText(r checkResult) string {
 	}
 	if warnings > 0 {
 		parts = append(parts, plural(warnings, "warning"))
+	}
+	if infos > 0 {
+		parts = append(parts, fmt.Sprintf("%d info", infos))
 	}
 	if len(parts) == 0 {
 		return "Passed"

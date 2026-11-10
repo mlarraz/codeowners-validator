@@ -1,0 +1,4 @@
+==> Executing File Exist Checker (<duration>)
+    [inf] line 13: "/this-folder-does-not-exits/really" does not match any files in repository
+
+1 check(s) executed, no failure(s)

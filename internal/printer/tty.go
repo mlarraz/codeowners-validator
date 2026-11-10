@@ -51,6 +51,8 @@ func (tty *TTYPrinter) PrintCheckResult(checkName string, duration time.Duration
 func (*TTYPrinter) severityPrintfFunc(severity check.SeverityType) func(w io.Writer, format string, a ...interface{}) {
 	p := color.New()
 	switch severity {
+	case check.Info:
+		p.Add(color.FgCyan)
 	case check.Warning:
 		p.Add(color.FgYellow)
 	case check.Error:
