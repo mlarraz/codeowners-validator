@@ -43,6 +43,17 @@ func TestTTYPrinterPrintCheckResult(t *testing.T) {
 					Severity: check.Warning,
 					Message:  "Warning without line number",
 				},
+				{
+					Severity:  check.Info,
+					LineNo:    ptr.Uint64Ptr(7),
+					Message:   "Known issue in line 7",
+					Baselined: true,
+				},
+				{
+					Severity:  check.Info,
+					Message:   "Known issue without line number",
+					Baselined: true,
+				},
 			},
 		}, errors.New("some check internal error"))
 		// then

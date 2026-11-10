@@ -74,10 +74,13 @@ func (p *GitHubActionsPrinter) PrintSummary(allCheck, failedChecks int) {
 	}
 }
 
-// printAnnotations prints a workflow command for every issue of the check, see
-// https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands
+// printAnnotations prints a workflow command for every issue of the check that isn't in the
+// baseline, see https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands
 func (p *GitHubActionsPrinter) printAnnotations(r checkResult) {
 	for _, i := range r.out.Issues {
+		if i.Baselined {
+			continue
+		}
 		props := []string{"file=" + escapeProperty(p.file)}
 		if i.LineNo != nil {
 			props = append(props, fmt.Sprintf("line=%d", *i.LineNo))
@@ -92,10 +95,14 @@ func (p *GitHubActionsPrinter) printAnnotations(r checkResult) {
 }
 
 func annotationLevel(s check.SeverityType) string {
-	if s == check.Warning {
+	switch s {
+	case check.Info:
+		return "notice"
+	case check.Warning:
 		return "warning"
+	default:
+		return "error"
 	}
-	return "error"
 }
 
 func (p *GitHubActionsPrinter) writeJobSummary(allCheck, failedChecks int) error {
@@ -145,11 +152,16 @@ func resultText(r checkResult) string {
 		return "Internal error"
 	}
 
-	var errs, warnings int
+	var errs, warnings, infos, baselined int
 	for _, i := range r.out.Issues {
-		if i.Severity == check.Warning {
+		switch {
+		case i.Baselined:
+			baselined++
+		case i.Severity == check.Info:
+			infos++
+		case i.Severity == check.Warning:
 			warnings++
-		} else {
+		default:
 			errs++
 		}
 	}
@@ -160,6 +172,12 @@ func resultText(r checkResult) string {
 	}
 	if warnings > 0 {
 		parts = append(parts, plural(warnings, "warning"))
+	}
+	if infos > 0 {
+		parts = append(parts, fmt.Sprintf("%d info", infos))
+	}
+	if baselined > 0 {
+		parts = append(parts, fmt.Sprintf("%d in baseline", baselined))
 	}
 	if len(parts) == 0 {
 		return "Passed"
@@ -175,15 +193,15 @@ func plural(n int, noun string) string {
 }
 
 // issuesText lists the issues of the check the way TTYPrinter does, truncated to
-// summaryCheckLimit bytes at a line boundary.
+// summaryCheckLimit bytes at a line boundary. The issues in the baseline are listed last, so that
+// the truncation cuts them first.
 func issuesText(r checkResult) string {
+	issues := append([]check.Issue(nil), r.out.Issues...)
+	sort.SliceStable(issues, func(i, j int) bool { return !issues[i].Baselined && issues[j].Baselined })
+
 	var b strings.Builder
-	for _, i := range r.out.Issues {
-		fmt.Fprintf(&b, "[%s]", strings.ToLower(i.Severity.String()[:3]))
-		if i.LineNo != nil {
-			fmt.Fprintf(&b, " line %d:", *i.LineNo)
-		}
-		fmt.Fprintf(&b, " %s\n", i.Message)
+	for _, i := range issues {
+		fmt.Fprintf(&b, "[%s]%s %s\n", strings.ToLower(i.Severity.String()[:3]), issueLocation(i), i.Message)
 	}
 	if r.err != nil {
 		fmt.Fprintf(&b, "[Internal Error] %s\n", r.err)

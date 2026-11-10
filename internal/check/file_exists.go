@@ -37,7 +37,7 @@ func (f *FileExist) Check(ctx context.Context, in Input) (Output, error) {
 		switch {
 		case p.err != nil:
 			msg := fmt.Sprintf("%q is not a valid CODEOWNERS pattern: %s", p.entry.Pattern, p.err)
-			bldr.ReportIssue(msg, WithEntry(p.entry))
+			bldr.ReportIssue(msg, WithEntry(p.entry), WithKey(p.entry.Pattern))
 		default:
 			matched, err := matcher.matchesAny(p)
 			if err != nil {
@@ -45,7 +45,7 @@ func (f *FileExist) Check(ctx context.Context, in Input) (Output, error) {
 			}
 			if !matched {
 				msg := fmt.Sprintf("%q does not match any files in repository", p.entry.Pattern)
-				bldr.ReportIssue(msg, WithEntry(p.entry))
+				bldr.ReportIssue(msg, WithEntry(p.entry), WithKey(p.entry.Pattern))
 			}
 		}
 	}

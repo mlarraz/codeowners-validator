@@ -85,7 +85,8 @@ func (v *ValidOwner) Check(ctx context.Context, in Input) (Output, error) {
 
 	for _, entry := range in.CodeownersEntries {
 		if len(entry.Owners) == 0 && !v.allowUnownedPatterns {
-			bldr.ReportIssue("Missing owner, at least one owner is required", WithEntry(entry), WithSeverity(Warning))
+			msg := "Missing owner, at least one owner is required"
+			bldr.ReportIssue(msg, WithEntry(entry), WithSeverity(Warning), WithKey(entryKey(msg, entry)))
 			continue
 		}
 
@@ -95,7 +96,8 @@ func (v *ValidOwner) Check(ctx context.Context, in Input) (Output, error) {
 					continue
 				}
 				if !isGitHubTeam(owner) {
-					bldr.ReportIssue(fmt.Sprintf("Only team owners allowed and %q is not a team", owner), WithEntry(entry))
+					msg := fmt.Sprintf("Only team owners allowed and %q is not a team", owner)
+					bldr.ReportIssue(msg, WithEntry(entry), WithKey(entryKey(msg, entry)))
 				}
 			}
 		}
@@ -118,11 +120,12 @@ func (v *ValidOwner) Check(ctx context.Context, in Input) (Output, error) {
 		}
 
 		// GitHub numbers lines from 1; an error without a line is reported for the whole file.
-		var opts []ReportIssueOpt
+		msg := codeownersErrorMessage(apiErr, owner)
+		opts := []ReportIssueOpt{WithKey(lineKey(msg, apiErr.GetSource()))}
 		if line := apiErr.GetLine(); line > 0 {
 			opts = append(opts, WithLineNo(uint64(line)))
 		}
-		bldr.ReportIssue(codeownersErrorMessage(apiErr, owner), opts...)
+		bldr.ReportIssue(msg, opts...)
 	}
 
 	return bldr.Output(), nil

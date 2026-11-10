@@ -2,7 +2,10 @@ package load
 
 import (
 	"context"
+	"slices"
+	"strings"
 
+	"github.com/mlarraz/codeowners-validator/internal/baseline"
 	"github.com/mlarraz/codeowners-validator/internal/check"
 	"github.com/mlarraz/codeowners-validator/internal/envconfig"
 	"github.com/mlarraz/codeowners-validator/internal/github"
@@ -13,28 +16,76 @@ import (
 // defaultChecks are the checks that run when none are listed.
 var defaultChecks = []string{"syntax", "duppatterns", "files", "owners"}
 
+// allChecks are the names of all checks.
+var allChecks = []string{"syntax", "duppatterns", "files", "owners", "notowned", "avoid-shadowing"}
+
+// Check is a check and the name that it's listed with in CHECKS and in the baseline.
+type Check struct {
+	Name    string
+	Checker check.Checker
+}
+
 // Checks returns the listed checks, or the default checks if none are listed. Only the listed
 // checks read their configuration and create clients.
-func Checks(ctx context.Context, enabledChecks []string) ([]check.Checker, error) {
+//
+// A check can be listed with a level, as name:level, to report its issues at that level at most,
+// see check.ParseLevel. The issues listed in known are reported as baselined, see
+// check.WithBaseline.
+func Checks(ctx context.Context, enabledChecks []string, known baseline.Baseline) ([]Check, error) {
 	if len(enabledChecks) == 0 {
 		enabledChecks = defaultChecks
 	}
 
-	var checks []check.Checker
-
-	if contains(enabledChecks, "syntax") {
-		checks = append(checks, check.NewValidSyntax())
+	for name := range known {
+		if !slices.Contains(allChecks, name) {
+			return nil, errors.Errorf("the baseline lists issues of %q, which isn't a check; possible checks: %s", name, strings.Join(allChecks, ","))
+		}
 	}
 
-	if contains(enabledChecks, "duppatterns") {
-		checks = append(checks, check.NewDuplicatedPattern())
+	levels := make(map[string]check.SeverityType, len(enabledChecks))
+	for _, c := range enabledChecks {
+		name, level, hasLevel := strings.Cut(c, ":")
+		levels[name] = 0
+		if !hasLevel {
+			continue
+		}
+		l, err := check.ParseLevel(level)
+		if err != nil {
+			return nil, errors.Wrapf(err, "while reading the level of the %s check", name)
+		}
+		levels[name] = l
 	}
 
-	if contains(enabledChecks, "files") {
-		checks = append(checks, check.NewFileExist())
+	enabled := func(name string) bool {
+		_, ok := levels[name]
+		return ok
 	}
 
-	if contains(enabledChecks, "owners") {
+	var checks []Check
+	add := func(name string, c check.Checker) {
+		if keys, ok := known[name]; ok {
+			c = check.WithBaseline(c, keys)
+		}
+		// The level applies to the baseline's warnings about stale entries too.
+		if level := levels[name]; level != 0 {
+			c = check.WithLevel(c, level)
+		}
+		checks = append(checks, Check{Name: name, Checker: c})
+	}
+
+	if enabled("syntax") {
+		add("syntax", check.NewValidSyntax())
+	}
+
+	if enabled("duppatterns") {
+		add("duppatterns", check.NewDuplicatedPattern())
+	}
+
+	if enabled("files") {
+		add("files", check.NewFileExist())
+	}
+
+	if enabled("owners") {
 		var cfg struct {
 			OwnerChecker check.ValidOwnerConfig
 			Github       github.ClientConfig
@@ -53,10 +104,10 @@ func Checks(ctx context.Context, enabledChecks []string) ([]check.Checker, error
 			return nil, errors.Wrap(err, "while enabling 'owners' checker")
 		}
 
-		checks = append(checks, owners)
+		add("owners", owners)
 	}
 
-	if contains(enabledChecks, "notowned") {
+	if enabled("notowned") {
 		var cfg struct {
 			NotOwnedChecker check.NotOwnedFileConfig
 		}
@@ -64,21 +115,12 @@ func Checks(ctx context.Context, enabledChecks []string) ([]check.Checker, error
 			return nil, errors.Wrapf(err, "while loading config for %s", "notowned")
 		}
 
-		checks = append(checks, check.NewNotOwnedFile(cfg.NotOwnedChecker))
+		add("notowned", check.NewNotOwnedFile(cfg.NotOwnedChecker))
 	}
 
-	if contains(enabledChecks, "avoid-shadowing") {
-		checks = append(checks, check.NewAvoidShadowing())
+	if enabled("avoid-shadowing") {
+		add("avoid-shadowing", check.NewAvoidShadowing())
 	}
 
 	return checks, nil
-}
-
-func contains(checks []string, name string) bool {
-	for _, c := range checks {
-		if c == name {
-			return true
-		}
-	}
-	return false
 }

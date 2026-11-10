@@ -40,7 +40,7 @@ func (c *AvoidShadowing) Check(ctx context.Context, in Input) (Output, error) {
 	var bldr OutputBuilder
 	for _, s := range shadowed {
 		msg := fmt.Sprintf("Pattern %q has no effect: later lines take precedence for every file it matches:\n%s", s.rule.entry.Pattern, c.listFormatFunc(matcher, s.by))
-		bldr.ReportIssue(msg, WithEntry(s.rule.entry))
+		bldr.ReportIssue(msg, WithEntry(s.rule.entry), WithKey(s.rule.entry.Pattern))
 	}
 
 	return bldr.Output(), nil

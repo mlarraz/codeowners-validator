@@ -90,7 +90,7 @@ func TestFileExistMatchesFilesWithGitHubSemantics(t *testing.T) {
 				return
 			}
 			require.Len(t, out.Issues, 1)
-			assert.Equal(t, issueAt(1, fmt.Sprintf("%q does not match any files in repository", tc.pattern)), out.Issues[0])
+			assert.Equal(t, issueAt(1, fmt.Sprintf("%q does not match any files in repository", tc.pattern), tc.pattern), out.Issues[0])
 		})
 	}
 }
@@ -144,7 +144,7 @@ func TestFileExistLiteralDirectoryBoundary(t *testing.T) {
 				assert.Empty(t, out.Issues)
 				return
 			}
-			assert.Equal(t, []check.Issue{issueAt(1, fmt.Sprintf("%q does not match any files in repository", tc.pattern))}, out.Issues)
+			assert.Equal(t, []check.Issue{issueAt(1, fmt.Sprintf("%q does not match any files in repository", tc.pattern), tc.pattern)}, out.Issues)
 		})
 	}
 }
@@ -160,8 +160,8 @@ func TestFileExistReportsEveryUnmatchedPattern(t *testing.T) {
 	// then
 	require.NoError(t, err)
 	assert.Equal(t, []check.Issue{
-		issueAt(2, `"/missing/" does not match any files in repository`),
-		issueAt(3, `"*.rs" does not match any files in repository`),
+		issueAt(2, `"/missing/" does not match any files in repository`, "/missing/"),
+		issueAt(3, `"*.rs" does not match any files in repository`, "*.rs"),
 	}, out.Issues)
 }
 
@@ -177,7 +177,7 @@ func TestFileExistOnlyMatchesTrackedFiles(t *testing.T) {
 
 	// then
 	require.NoError(t, err)
-	assert.Equal(t, []check.Issue{issueAt(1, `"/notes.txt" does not match any files in repository`)}, out.Issues)
+	assert.Equal(t, []check.Issue{issueAt(1, `"/notes.txt" does not match any files in repository`, "/notes.txt")}, out.Issues)
 }
 
 func TestFileExistReportsInvalidPatterns(t *testing.T) {
@@ -211,7 +211,7 @@ func TestFileExistReportsInvalidPatterns(t *testing.T) {
 
 			// then
 			require.NoError(t, err)
-			assert.Equal(t, []check.Issue{issueAt(1, tc.wantMessage)}, out.Issues)
+			assert.Equal(t, []check.Issue{issueAt(1, tc.wantMessage, tc.pattern)}, out.Issues)
 		})
 	}
 }
@@ -227,7 +227,7 @@ func TestFileExistWorksOutsideGitRepository(t *testing.T) {
 
 	// then
 	require.NoError(t, err)
-	assert.Equal(t, []check.Issue{issueAt(2, `"/missing/" does not match any files in repository`)}, out.Issues)
+	assert.Equal(t, []check.Issue{issueAt(2, `"/missing/" does not match any files in repository`, "/missing/")}, out.Issues)
 }
 
 func TestFileExistReturnsErrorWhenFilesCannotBeListed(t *testing.T) {
@@ -250,10 +250,11 @@ func newInput(repository *repo.Repo, codeowners string) check.Input {
 	return in
 }
 
-func issueAt(line uint64, msg string) check.Issue {
+func issueAt(line uint64, msg, key string) check.Issue {
 	return check.Issue{
 		Severity: check.Error,
 		LineNo:   ptr.Uint64Ptr(line),
 		Message:  msg,
+		Key:      key,
 	}
 }

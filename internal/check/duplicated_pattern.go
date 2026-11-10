@@ -50,7 +50,7 @@ func (d *DuplicatedPattern) Check(ctx context.Context, in Input) (Output, error)
 	for _, key := range duplicated {
 		entries := patterns[key]
 		msg := fmt.Sprintf("Pattern %q is defined %d times in lines:\n%s", key, len(entries), d.listFormatFunc(entries))
-		bldr.ReportIssue(msg, WithEntry(last(key)))
+		bldr.ReportIssue(msg, WithEntry(last(key)), WithKey(key))
 	}
 
 	return bldr.Output(), nil

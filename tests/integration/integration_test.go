@@ -279,6 +279,165 @@ func TestCheckFailures(t *testing.T) {
 	}
 }
 
+// TestCheckLevels tests that a check listed with a level reports its issues at that level, so that
+// it can run without failing the validation.
+func TestCheckLevels(t *testing.T) {
+	type Envs map[string]string
+	tests := []struct {
+		name     string
+		envs     Envs
+		exitCode int
+		golden   bool
+	}{
+		{
+			// A single check, because the checks run in parallel and print in the order they finish.
+			name:     "info",
+			envs:     Envs{"CHECKS": "files:info"},
+			exitCode: 0,
+			golden:   true,
+		},
+		{
+			name:     "warning_with_error_failure_level",
+			envs:     Envs{"CHECKS": "files:warning", "CHECK_FAILURE_LEVEL": "error"},
+			exitCode: 0,
+		},
+		{
+			name:     "warning_with_warning_failure_level",
+			envs:     Envs{"CHECKS": "files:warning"},
+			exitCode: 3,
+		},
+		{
+			name:     "only_the_listed_check_is_lowered",
+			envs:     Envs{"CHECKS": "duppatterns,files:info"},
+			exitCode: 3,
+		},
+		{
+			name:     "invalid_level",
+			envs:     Envs{"CHECKS": "files:error"},
+			exitCode: 1,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			repoDir := SampleRepo(t, codeownersSamplesRepo, "failures")
+
+			codeownersCmd := Exec().
+				Binary(os.Getenv(binaryPathEnvName)).
+				WithEnv("REPOSITORY_PATH", repoDir)
+			for k, v := range tc.envs {
+				codeownersCmd.WithEnv(k, v)
+			}
+
+			// when
+			result := codeownersCmd.AwaitResultAtMost(3 * time.Minute)
+
+			// then
+			assert.Equal(t, tc.exitCode, result.ExitCode, result.Stdout+result.Stderr)
+			if tc.golden {
+				g := goldie.New(t, goldie.WithNameSuffix(".golden.txt"))
+				g.Assert(t, t.Name(), []byte(normalizeTimeDurations(result.Stdout)))
+			}
+		})
+	}
+}
+
+// TestBaseline tests that the baseline command lists the current issues, that the validation
+// passes with them and fails on new issues, and that fixed issues have to be removed from the
+// baseline.
+func TestBaseline(t *testing.T) {
+	// given
+	repoDir := SampleRepo(t, codeownersSamplesRepo, "failures")
+	baselinePath := filepath.Join(repoDir, "codeowners-baseline.yml")
+	codeownersPath := filepath.Join(repoDir, "CODEOWNERS")
+	run := func(t *testing.T, envs map[string]string, args ...string) *ExecuteOutput {
+		t.Helper()
+		cmd := Exec().
+			Binary(os.Getenv(binaryPathEnvName)).
+			WithArgs(args...).
+			WithEnv("REPOSITORY_PATH", repoDir).
+			WithEnv("CHECKS", "files,duppatterns").
+			WithEnv("BASELINE_PATH", "codeowners-baseline.yml")
+		for k, v := range envs {
+			cmd.WithEnv(k, v)
+		}
+		return cmd.AwaitResultAtMost(3 * time.Minute)
+	}
+
+	t.Run("baseline writes the current issues", func(t *testing.T) {
+		result := run(t, nil, "baseline")
+
+		require.Equal(t, 0, result.ExitCode, result.Stdout+result.Stderr)
+		assert.Equal(t, "duppatterns: 1 issue(s) in the baseline\nfiles: 1 issue(s) in the baseline\n"+
+			"Wrote "+baselinePath+" with the issues of: [duppatterns files]\n", result.Stdout)
+		content, err := os.ReadFile(baselinePath)
+		require.NoError(t, err)
+		g := goldie.New(t, goldie.WithNameSuffix(".golden.txt"))
+		g.Assert(t, t.Name(), content)
+	})
+
+	t.Run("the known issues don't fail", func(t *testing.T) {
+		result := run(t, nil)
+
+		assert.Equal(t, 0, result.ExitCode, result.Stdout+result.Stderr)
+		assert.Contains(t, result.Stdout, `[inf] line 13 (in baseline): "/this-folder-does-not-exits/really" does not match any files in repository`)
+		assert.Contains(t, result.Stdout, "2 check(s) executed, no failure(s)")
+	})
+
+	t.Run("the baseline command keeps the issues of the checks that don't run", func(t *testing.T) {
+		result := run(t, map[string]string{"CHECKS": "syntax"}, "baseline")
+
+		require.Equal(t, 0, result.ExitCode, result.Stdout+result.Stderr)
+		assert.Contains(t, result.Stdout, "with the issues of: [duppatterns files]")
+	})
+
+	t.Run("a new issue fails", func(t *testing.T) {
+		f, err := os.OpenFile(codeownersPath, os.O_APPEND|os.O_WRONLY, 0o600)
+		require.NoError(t, err)
+		// The sample doesn't end with a newline.
+		_, err = f.WriteString("\n/missing/too @octocat\n")
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+
+		result := run(t, nil)
+
+		assert.Equal(t, 3, result.ExitCode, result.Stdout+result.Stderr)
+		assert.Contains(t, result.Stdout, `[err] line 24: "/missing/too" does not match any files in repository`)
+		assert.Contains(t, result.Stdout, "2 check(s) executed, 1 failure(s)")
+	})
+
+	t.Run("a fixed issue fails until it's removed from the baseline", func(t *testing.T) {
+		content, err := os.ReadFile(codeownersPath)
+		require.NoError(t, err)
+		fixed := strings.Replace(string(content), "/this-folder-does-not-exits/really @sample-owner\n", "", 1)
+		fixed = strings.Replace(fixed, "/missing/too @octocat\n", "", 1)
+		require.NoError(t, os.WriteFile(codeownersPath, []byte(fixed), 0o600))
+
+		result := run(t, map[string]string{"CHECKS": "files"})
+
+		assert.Equal(t, 3, result.ExitCode, result.Stdout+result.Stderr)
+		assert.Contains(t, result.Stdout, `[war] Baseline entry "/this-folder-does-not-exits/really" doesn't match any issue anymore: remove it from the baseline`)
+	})
+
+	t.Run("a baseline entry of an unknown check fails", func(t *testing.T) {
+		require.NoError(t, os.WriteFile(baselinePath, []byte("file:\n  - /a\n"), 0o600))
+
+		result := run(t, nil)
+
+		assert.Equal(t, 1, result.ExitCode)
+		assert.Contains(t, result.Stderr, `the baseline lists issues of \"file\", which isn't a check`)
+	})
+
+	t.Run("a missing baseline fails", func(t *testing.T) {
+		require.NoError(t, os.Remove(baselinePath))
+
+		result := run(t, nil)
+
+		assert.Equal(t, 1, result.ExitCode)
+		assert.Contains(t, result.Stderr, "while reading the baseline")
+	})
+}
+
 // TestCheckSparseBloblessClone tests that the checks that inspect the files of the repository
 // don't need a full checkout: a blobless clone that contains only the CODEOWNERS file gives the
 // same result as the full checkout.

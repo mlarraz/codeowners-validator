@@ -52,11 +52,11 @@ func (v *ValidSyntax) Check(ctx context.Context, in Input) (Output, error) {
 	case size > maxCodeownersSize:
 		msg := fmt.Sprintf("The CODEOWNERS file is %s bytes, over GitHub's limit of %s bytes (3 MiB). GitHub ignores the file and doesn't request reviews from code owners.",
 			humanize.Comma(size), humanize.Comma(maxCodeownersSize))
-		bldr.ReportIssue(msg)
+		bldr.ReportIssue(msg, WithKey("CODEOWNERS file over the size limit"))
 	case size*100 >= maxCodeownersSize*codeownersSizeWarningPercent:
 		msg := fmt.Sprintf("The CODEOWNERS file is %s bytes, %d%% of GitHub's limit of %s bytes (3 MiB). GitHub ignores a file over the limit.",
 			humanize.Comma(size), size*100/maxCodeownersSize, humanize.Comma(maxCodeownersSize))
-		bldr.ReportIssue(msg, WithSeverity(Warning))
+		bldr.ReportIssue(msg, WithSeverity(Warning), WithKey("CODEOWNERS file near the size limit"))
 	}
 
 	for _, entry := range in.CodeownersEntries {
@@ -65,7 +65,7 @@ func (v *ValidSyntax) Check(ctx context.Context, in Input) (Output, error) {
 		}
 
 		if entry.Pattern == "" {
-			bldr.ReportIssue("Missing pattern", WithEntry(entry))
+			bldr.ReportIssue("Missing pattern", WithEntry(entry), WithKey(entryKey("Missing pattern", entry)))
 		}
 
 	ownersLoop:
@@ -76,12 +76,12 @@ func (v *ValidSyntax) Check(ctx context.Context, in Input) (Output, error) {
 			case strings.HasPrefix(item, "@"):
 				if !usernameOrTeamRegexp.MatchString(item) {
 					msg := fmt.Sprintf("Owner '%s' does not look like a GitHub username or team name", item)
-					bldr.ReportIssue(msg, WithEntry(entry), WithSeverity(Warning))
+					bldr.ReportIssue(msg, WithEntry(entry), WithSeverity(Warning), WithKey(entryKey(msg, entry)))
 				}
 			default:
 				if !emailRegexp.MatchString(item) {
 					msg := fmt.Sprintf("Owner '%s' does not look like an email", item)
-					bldr.ReportIssue(msg, WithEntry(entry))
+					bldr.ReportIssue(msg, WithEntry(entry), WithKey(entryKey(msg, entry)))
 				}
 			}
 		}
